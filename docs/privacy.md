@@ -12,10 +12,12 @@ only, and so do the example figures in the README.
 ## 2. Stripped notebook outputs
 
 Executed cells embed their results, figures and sample names included, inside
-the `.ipynb` file. Strip them before every commit:
+the `.ipynb` file. The section 4 panel also saves its figure and metadata
+line into the notebook's widget state, which a plain output clear does not
+touch, so strip both before every commit:
 
 ```bash
-jupyter nbconvert --clear-output --inplace XRD_Rietveld_Plotter.ipynb
+python -m nbstripout XRD_Rietveld_Plotter.ipynb
 ```
 
 ## 3. Automatic strip on commit (recommended)

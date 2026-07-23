@@ -336,7 +336,12 @@ def test_batch_prints_one_block_per_file(synth, tmp_path, capsys):
     text = capsys.readouterr().out
     assert "\na_good.csv\n" in text, "the file name must open its own block"
     assert "\n  phases: Phase 1 #" in text, text
-    assert "\n  saved " in text and "_XRD_analysis_sqrt.pdf and .png" in text
+    saved_line = next(line for line in text.splitlines()
+                      if line.startswith("  saved "))
+    assert saved_line.endswith("a_good_XRD_analysis_sqrt.pdf and .png"), (
+        "the saved line must name the file it wrote: " + saved_line)
+    assert (text.index("\na_good.csv\n") < text.index("\n  phases: ")
+            < text.index("\n  saved ")), "the block lost its order"
 
 
 def test_batch_repeats_failures_in_the_summary(synth, tmp_path, capsys):
@@ -350,6 +355,7 @@ def test_batch_repeats_failures_in_the_summary(synth, tmp_path, capsys):
     xp.process_folder(folder, synth.meta, out, show=False)
     text = capsys.readouterr().out
     assert "  FAILED: " in text, "the failing file must say so in its block"
+    assert "=" * 60 in text, "the summary lost its separator"
     tail = text.rsplit("=" * 60, 1)[1]
     assert "2 of 3 file(s) plotted" in tail, tail
     assert "FAILED (1): b_broken.csv" in tail, "a failure must survive the run"

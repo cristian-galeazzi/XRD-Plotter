@@ -59,6 +59,7 @@ version this is developed with.
 | The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
 | The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
 | A folder whose middle file is unusable | It is reported with its reason and the files after it are still drawn |
+| A batch of a good, a broken and a good file | Each file prints its own block, and the failure is repeated in the summary at the end |
 
 ## What validation does not cover
 
