@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  notebook:
+  tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -30,8 +30,11 @@ jobs:
       # whatever Jupyter host the reader already has, not to requirements.txt.
       - name: Install dependencies
         run: pip install -r requirements.txt nbconvert ipykernel
-      # Section 2 of the notebook is the validation suite and raises
-      # AssertionError on failure, so executing the notebook runs the tests.
-      # Section 3 finds data/ empty and reports it instead of failing.
+      # The suite tests the engine directly and gives a per-test report.
+      - name: Run the validation suite
+        run: pytest -q
+      # The notebook is a second target: it must still import the engine,
+      # run the suite and reach the batch cell, which finds data/ empty and
+      # reports it instead of failing.
       - name: Execute the notebook
         run: python -m nbconvert --to notebook --execute --output executed.ipynb XRD_Rietveld_Plotter.ipynb
