@@ -58,6 +58,9 @@ version this is developed with.
 | The window unset, then the constants, then `x_min`/`x_max` in the metadata | Each overrides the one before, with the intensity axis rescaled to the window |
 | The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
 | The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
+| The section 4 save reusing the batch name and writer | `_sqrt`, `_linear` and the `_counts` suffix chosen from the toggles, both files written under that name |
+| The window line the batch prints | The drawn 2theta range, marked `metadata` when a row set it and `auto` otherwise |
+| The window section 4 prefills from a metadata row | The `x_min`/`x_max` pair read back, blank cells and an absent file giving the widen-to-full sentinel |
 | A folder whose middle file is unusable | It is reported with its reason and the files after it are still drawn |
 | A batch of a good, a broken and a good file | Each file prints its own block, and the failure is repeated in the summary at the end |
 

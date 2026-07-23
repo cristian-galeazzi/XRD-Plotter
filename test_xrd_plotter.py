@@ -282,6 +282,25 @@ def test_window_from_metadata_rescales_the_intensity_axis(synth, drawn):
     assert cropped.axes[0].get_ylim()[1] < whole.axes[0].get_ylim()[1]
 
 
+def test_top_margin_clears_a_calc_peak_above_the_obs(tmp_path):
+    # A fit that overshoots draws a calc peak taller than the obs scatter;
+    # the top margin is set on the obs max, so it must still clear calc.
+    x = np.linspace(5, 90, 800)
+    obs = 50 + 100 * np.exp(-((x - 30) ** 2) / 0.4)
+    calc = 50 + 150 * np.exp(-((x - 30) ** 2) / 0.4)
+    df = pd.DataFrame({"2theta": x, "Obs": obs, "Calc": calc, "bkg": 50.0,
+                       "diff/sigma": 0.0,
+                       "Ph": np.where((x > 29) & (x < 31), 1.0, np.nan)})
+    csv = tmp_path / "overshoot.csv"
+    df.to_csv(csv, sep=";", index=False)
+    data, phase_cols, error = xp.read_gsas2_csv(csv)
+    assert error is None, error
+    theta, o, c, b, r, ph = xp.prepare_data(data, phase_cols, use_sqrt=True)
+    fig = xp.create_plot(theta, o, c, b, r, ph, "n", {}, use_sqrt=True)
+    assert c.max() < fig.axes[0].get_ylim()[1], "the calc peak is clipped"
+    plt.close(fig)
+
+
 # 11. The unweighted panel.
 def test_unweighted_residuals(synth, drawn):
     data, phase_cols, error = xp.read_gsas2_csv(synth.full, weighted=False)
@@ -312,6 +331,38 @@ def test_replot_file(synth):
         xp.replot_file(synth.tmp / "only_obs.csv", synth.meta)
 
 
+# 12b. The section 4 Save button reuses the batch naming and writer.
+def test_output_basename_matches_the_batch():
+    assert xp.output_basename("s", use_sqrt=True) == "s_XRD_analysis_sqrt"
+    assert xp.output_basename("s", use_sqrt=False) == "s_XRD_analysis_linear"
+    # weighted=False adds _counts, so a save with the other residual mode
+    # does not overwrite the weighted file under the same name.
+    assert xp.output_basename("s", weighted=False) == "s_XRD_analysis_sqrt_counts"
+    # weighted left None follows the constant, which the suite keeps at True.
+    assert xp.output_basename("s") == "s_XRD_analysis_sqrt"
+
+
+def test_sample_window_reads_the_metadata_row(synth, tmp_path):
+    meta = tmp_path / "meta.csv"
+    meta.write_text("filename;formula;x_min;x_max\n"
+                    "sample_A.csv;F;20;70\nsample_B.csv;G;;\n")
+    assert xp.sample_window(meta, "sample_A.csv") == (20.0, 70.0)
+    # blank cells and an absent file both give the widen-to-full sentinel.
+    assert xp.sample_window(meta, "sample_B.csv") == (None, None)
+    assert xp.sample_window(meta, "not_listed.csv") == (None, None)
+
+
+def test_save_figure_writes_both_formats(tmp_path):
+    fig, _ = plt.subplots()
+    base = xp.save_figure(fig, tmp_path / "out", "sample_XRD_analysis_sqrt")
+    plt.close(fig)
+    assert base == "sample_XRD_analysis_sqrt"
+    # Files are sorted into pdf/ and png/ subfolders, not the output root.
+    assert (tmp_path / "out" / "pdf" / "sample_XRD_analysis_sqrt.pdf").is_file()
+    assert (tmp_path / "out" / "png" / "sample_XRD_analysis_sqrt.png").is_file()
+    assert not (tmp_path / "out" / "sample_XRD_analysis_sqrt.pdf").exists()
+
+
 # 13. One unusable file must not end the batch.
 def test_batch_survives_a_broken_file(synth, tmp_path):
     folder, out = tmp_path / "in", tmp_path / "out"
@@ -323,7 +374,8 @@ def test_batch_survives_a_broken_file(synth, tmp_path):
 
     outcome = xp.process_folder(folder, synth.meta, out, show=False)
     assert [status for _, status, _ in outcome] == ["ok", "error", "ok"]
-    assert len(list(out.glob("*.png"))) == 2
+    assert len(list((out / "png").glob("*.png"))) == 2
+    assert len(list((out / "pdf").glob("*.pdf"))) == 2
 
 
 # 14. The printed report: one block per file, failures visible at the end.
@@ -338,10 +390,30 @@ def test_batch_prints_one_block_per_file(synth, tmp_path, capsys):
     assert "\n  phases: Phase 1 #" in text, text
     saved_line = next(line for line in text.splitlines()
                       if line.startswith("  saved "))
-    assert saved_line.endswith("a_good_XRD_analysis_sqrt.pdf and .png"), (
+    assert saved_line.endswith("pdf/a_good_XRD_analysis_sqrt.pdf and "
+                               "png/a_good_XRD_analysis_sqrt.png"), (
         "the saved line must name the file it wrote: " + saved_line)
     assert (text.index("\na_good.csv\n") < text.index("\n  phases: ")
             < text.index("\n  saved ")), "the block lost its order"
+    # The window line is shown, marked auto when no metadata row set it.
+    assert "\n  2theta window: " in text and "(auto)" in text, text
+    assert (text.index("\n  phases: ") < text.index("\n  2theta window: ")
+            < text.index("\n  saved ")), "the window line is out of place"
+
+
+def test_batch_window_line_names_the_metadata_source(synth, tmp_path):
+    folder, out = tmp_path / "in", tmp_path / "out"
+    folder.mkdir()
+    synth.df.to_csv(folder / "sample_A.csv", sep=";", index=False)
+    meta = folder / "meta.csv"
+    meta.write_text("filename;formula;x_min;x_max\nsample_A.csv;F;20;70\n")
+
+    import io as _io
+    import contextlib
+    buf = _io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        xp.process_folder(folder, meta, out, show=False)
+    assert "  2theta window: 20 to 70 (metadata)" in buf.getvalue()
 
 
 def test_batch_repeats_failures_in_the_summary(synth, tmp_path, capsys):

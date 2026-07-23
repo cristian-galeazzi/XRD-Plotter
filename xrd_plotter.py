@@ -10,6 +10,7 @@ on a copy, so the functions see the change:
     import xrd_plotter as xp
     xp.PLOT_X_MIN, xp.PLOT_X_MAX = 13, 85
 """
+import io
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +27,10 @@ from matplotlib.lines import Line2D
 PLOT_X_MIN, PLOT_X_MAX = None, None
 FIGURE_WIDTH, FIGURE_HEIGHT = 12, 10   # inches
 DPI_EXPORT = 600                       # PNG export resolution
+PREVIEW_WIDTH_PX = 640                 # on-screen width of the section-3 inline
+                                       # preview; the saved PNG and PDF are
+                                       # untouched, so lowering this only shrinks
+                                       # what scrolls past during a run
 
 # Lower panel: True draws diff/sigma, the residual divided by the standard
 # deviation of the point, so a well-fitted pattern stays inside a band of a
@@ -403,6 +408,11 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
     yrange = ymax - ymin
     base_y, step_y, tick_h = (ymin - 0.05 * yrange, 0.06 * yrange,
                               0.04 * yrange)
+    # The upper margin clears the calculated curve as well: where the fit
+    # overshoots, its peak rises above the observed scatter that set ymax,
+    # and scaling on obs alone would clip it against the top border.
+    calc_shown = calc[visible] if visible.any() else calc
+    peak = max(ymax, float(np.nanmax(calc_shown))) if len(calc_shown) else ymax
 
     labels = {ph: phase_label(ph) for ph in phases}
     ordered = sorted(phases, key=lambda ph: labels[ph])
@@ -432,7 +442,7 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
     y_low, y_high = ylim
     ax1.set_ylim(bottom=(base_y - (max(rows, 1) - 0.5) * step_y
                          if y_low is None else float(y_low)),
-                 top=(ymax + 0.05 * yrange if y_high is None
+                 top=(peak + 0.08 * yrange if y_high is None
                       else float(y_high)))
 
     # Legend: pattern entries, then one entry per detected phase.
@@ -512,6 +522,66 @@ def replot_file(csv_path, metadata_file, x_min=None, x_max=None,
 
 
 # --- Batch driver ---------------------------------------------------------
+def output_basename(stem, use_sqrt=True, weighted=None):
+    """Output file name for a sample stem, identical to the batch run.
+
+    weighted defaults to the WEIGHTED_RESIDUALS setting; pass it explicitly
+    (as section 4 does) so a figure saved with the other residual mode does
+    not overwrite the batch file under the same name.
+    """
+    weighted = WEIGHTED_RESIDUALS if weighted is None else weighted
+    return (f"{stem}_XRD_analysis{'_sqrt' if use_sqrt else '_linear'}"
+            f"{'' if weighted else '_counts'}")
+
+
+def save_figure(fig, output_folder, base):
+    """Write base.pdf and base.png into output_folder/pdf and .../png.
+
+    Sorting by extension keeps a large output folder tidy. Returns the base
+    name, which the caller pairs with the 'pdf/' and 'png/' subfolders.
+    """
+    out_dir = Path(output_folder)
+    (out_dir / "pdf").mkdir(parents=True, exist_ok=True)
+    (out_dir / "png").mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_dir / "pdf" / f"{base}.pdf", bbox_inches="tight",
+                facecolor="white")
+    fig.savefig(out_dir / "png" / f"{base}.png", dpi=DPI_EXPORT,
+                bbox_inches="tight", facecolor="white")
+    return base
+
+
+def sample_window(metadata_file, filename):
+    """The (x_min, x_max) a sample's metadata row sets, each None if unset.
+
+    Section 4 prefills its 2theta boxes with this, so a file opens on the
+    same window the batch would draw instead of the full measured range.
+    """
+    _, _, _, window = sample_info(load_metadata(metadata_file), filename,
+                                  filename)
+    return window
+
+
+def show_inline(fig):
+    """Render fig under the running cell at PREVIEW_WIDTH_PX; no-op off-kernel.
+
+    A saved PNG shown at an explicit width renders the same in classic
+    Jupyter, JupyterLab and VS Code, where relying on the active backend to
+    honour ``plt.show()`` does not. Outside a kernel (a plain script, the
+    pytest run) there is no display, so this returns without drawing.
+    """
+    try:
+        from IPython import get_ipython
+        from IPython.display import Image, display
+    except ImportError:
+        return
+    if get_ipython() is None:
+        return
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110, bbox_inches="tight",
+                facecolor="white")
+    display(Image(data=buf.getvalue(), width=PREVIEW_WIDTH_PX))
+
+
 def process_folder(data_folder, metadata_file, output_folder,
                    use_sqrt=True, show=True):
     """Plot every GSAS-II CSV export in data_folder; save PDF + PNG."""
@@ -542,26 +612,27 @@ def process_folder(data_folder, metadata_file, output_folder,
             report_colors(phase_cols, colors)
             theta, obs, calc, bkg, resid, phases = prepare_data(
                 data, phase_cols, use_sqrt=use_sqrt)
+            # Show the 2theta window actually drawn, and whether it came from
+            # the metadata row or from the measured range, so a limit that
+            # did not land (name mismatch, blank cell) is visible at a glance.
+            low, high = plot_window(theta, *window)
+            source = "metadata" if window != (None, None) else "auto"
+            print(f"  2theta window: {low:g} to {high:g} ({source})")
             fig = create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
                               use_sqrt=use_sqrt, xlim=window, colors=colors)
 
             # The residual suffix is added only when it is not the default,
             # so figures made before the setting existed keep their names.
-            base = (f"{f.stem}_XRD_analysis{'_sqrt' if use_sqrt else '_linear'}"
-                    f"{'' if WEIGHTED_RESIDUALS else '_counts'}")
-            fig.savefig(out_dir / f"{base}.pdf", bbox_inches="tight",
-                        facecolor="white")
-            fig.savefig(out_dir / f"{base}.png", dpi=DPI_EXPORT,
-                        bbox_inches="tight", facecolor="white")
+            base = output_basename(f.stem, use_sqrt, WEIGHTED_RESIDUALS)
+            save_figure(fig, out_dir, base)
             results.append((f.name, "ok", base))
 
             # The figure goes out under the header that names its file and
             # above the line that names its output, so the notebook reads as
-            # one block per sample while the run proceeds. A file backend has
-            # no window, so it is skipped rather than warned about.
-            if show and plt.get_backend().lower() != "agg":
-                plt.show()
-            print(f"  saved {out_dir / base}.pdf and .png")
+            # one block per sample while the run proceeds.
+            if show:
+                show_inline(fig)
+            print(f"  saved pdf/{base}.pdf and png/{base}.png")
             plt.close(fig)  # release memory between files
         except Exception as e:
             print(f"  FAILED: {e}")
