@@ -324,3 +324,32 @@ def test_batch_survives_a_broken_file(synth, tmp_path):
     outcome = xp.process_folder(folder, synth.meta, out, show=False)
     assert [status for _, status, _ in outcome] == ["ok", "error", "ok"]
     assert len(list(out.glob("*.png"))) == 2
+
+
+# 14. The printed report: one block per file, failures visible at the end.
+def test_batch_prints_one_block_per_file(synth, tmp_path, capsys):
+    folder, out = tmp_path / "in", tmp_path / "out"
+    folder.mkdir()
+    synth.df.to_csv(folder / "a_good.csv", sep=";", index=False)
+
+    xp.process_folder(folder, synth.meta, out, show=False)
+    text = capsys.readouterr().out
+    assert "\na_good.csv\n" in text, "the file name must open its own block"
+    assert "\n  phases: Phase 1 #" in text, text
+    assert "\n  saved " in text and "_XRD_analysis_sqrt.pdf and .png" in text
+
+
+def test_batch_repeats_failures_in_the_summary(synth, tmp_path, capsys):
+    folder, out = tmp_path / "in", tmp_path / "out"
+    folder.mkdir()
+    synth.df.to_csv(folder / "a_good.csv", sep=";", index=False)
+    synth.df.assign(Obs="n/a").to_csv(folder / "b_broken.csv", sep=";",
+                                      index=False)
+    synth.df.to_csv(folder / "c_good.csv", sep=";", index=False)
+
+    xp.process_folder(folder, synth.meta, out, show=False)
+    text = capsys.readouterr().out
+    assert "  FAILED: " in text, "the failing file must say so in its block"
+    tail = text.rsplit("=" * 60, 1)[1]
+    assert "2 of 3 file(s) plotted" in tail, tail
+    assert "FAILED (1): b_broken.csv" in tail, "a failure must survive the run"

@@ -140,8 +140,8 @@ def phase_fraction(pct, label):
     """Percentage for one phase, matched on the metadata key as a fragment."""
     hits = sorted(k for k in pct if k in label.lower())
     if len(hits) > 1:
-        print(f"Warning: metadata columns {', '.join(h + '_pct' for h in hits)}"
-              f" all match '{label}' - no percentage printed.")
+        print(f"  ! metadata columns {', '.join(h + '_pct' for h in hits)} "
+              f"all match '{label}', no percentage printed.")
         return 0.0
     return pct[hits[0]] if hits else 0.0
 
@@ -257,9 +257,7 @@ def read_gsas2_csv(csv_path, weighted=None):
             data[col] = vals
 
         if warnings:
-            print(f"[{csv_path.name}] " + "; ".join(warnings))
-        print(f"[{csv_path.name}] phases detected: "
-              + (", ".join(sorted(phase_cols, key=phase_label)) or "none"))
+            print("\n".join(f"  ! {w}" for w in warnings))
         return data, phase_cols, None
 
     except Exception as e:  # isolate unreadable files, keep the batch running
@@ -287,7 +285,7 @@ def load_metadata(metadata_path):
     df.columns = df.columns.str.strip().str.lower()
     fname_col = next((c for c in df.columns if c in ("filename", "file")), None)
     if fname_col is None:
-        print("Warning: metadata needs a 'filename' or 'file' column - ignored.")
+        print("  ! metadata needs a 'filename' or 'file' column, ignored.")
         return pd.DataFrame()
     df["filename"] = df[fname_col].astype(str).str.strip()
     df = df.drop_duplicates("filename", keep="first").set_index("filename")
@@ -310,7 +308,7 @@ def to_color(value):
     if not text or text.lower() == "nan":
         return None
     if not is_color_like(text):
-        print(f"Warning: '{text}' is not a colour, the cycle is used instead.")
+        print(f"  ! '{text}' is not a colour, the cycle is used instead.")
         return None
     return text
 
@@ -459,7 +457,7 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
     orphans = sorted(k for k in pct
                      if not any(k in lbl.lower() for lbl in seen))
     if orphans:
-        print("Warning: no phase in this file matches metadata column(s): "
+        print("  ! no phase in this file matches metadata column(s): "
               + ", ".join(o + "_pct" for o in orphans))
 
     ax2.plot(theta, resid, color=COLOR_RESIDUALS, lw=LINEWIDTH_RESIDUALS)
@@ -479,13 +477,13 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
 
 
 def report_colors(phase_cols, colors):
-    """Print the colour each detected phase was drawn with."""
-    labels = sorted(phase_label(c) for c in phase_cols)
+    """Print each detected phase with the colour it was drawn in."""
+    labels = list(dict.fromkeys(sorted(phase_label(c) for c in phase_cols)))
     if not labels:
+        print("  phases: none detected")
         return
     drawn = phase_colors(labels, colors)
-    print("  colours: " + ", ".join(f"{lbl} {drawn[lbl]}"
-                                    for lbl in dict.fromkeys(labels)))
+    print("  phases: " + ", ".join(f"{lbl} {drawn[lbl]}" for lbl in labels))
 
 
 def replot_file(csv_path, metadata_file, x_min=None, x_max=None,
@@ -532,6 +530,7 @@ def process_folder(data_folder, metadata_file, output_folder,
 
     results = []
     for f in files:
+        print(f"\n{f.name}")
         # One bad file must not end the batch, whether it fails in the
         # parser, in the drawing or on the way to disk.
         try:
@@ -556,18 +555,25 @@ def process_folder(data_folder, metadata_file, output_folder,
                         bbox_inches="tight", facecolor="white")
             results.append((f.name, "ok", base))
 
-            # The figure goes out before the line that names its files, so a
-            # notebook shows each plot with its own caption underneath as the
-            # run proceeds. A file backend has no window and says so, so it
-            # is skipped rather than warned about.
+            # The figure goes out under the header that names its file and
+            # above the line that names its output, so the notebook reads as
+            # one block per sample while the run proceeds. A file backend has
+            # no window, so it is skipped rather than warned about.
             if show and plt.get_backend().lower() != "agg":
                 plt.show()
-            print(f"  OK   {f.name} -> {base}.pdf / .png")
+            print(f"  saved {out_dir / base}.pdf and .png")
             plt.close(fig)  # release memory between files
         except Exception as e:
-            print(f"  SKIP {f.name}: {e}")
+            print(f"  FAILED: {e}")
             results.append((f.name, "error", str(e)))
             plt.close("all")
-    print(f"Done: {sum(1 for r in results if r[1] == 'ok')}/{len(files)} "
-          f"file(s) plotted, output in '{out_dir}'.")
+
+    # The summary repeats every failure. Between six figures a single line in
+    # the middle of the run is easy to scroll past.
+    failed = [name for name, status, _ in results if status == "error"]
+    print(f"\n{'=' * 60}")
+    print(f"{len(files) - len(failed)} of {len(files)} file(s) plotted, "
+          f"output in '{out_dir}'.")
+    if failed:
+        print(f"FAILED ({len(failed)}): " + ", ".join(failed))
     return results
