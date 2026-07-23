@@ -35,9 +35,9 @@ work here too.
 
 ## Colours stay private
 
-Pinning a colour in the metadata keeps the phase palette in your own
-uncommitted file rather than in the notebook. Each run prints what it used,
-so you read the mapping back without opening the figure:
+Pinning a colour here keeps the phase palette in your own uncommitted file
+rather than in the notebook. Each run prints what it used, so you read the
+mapping back without opening the figure:
 
 ```
 [sample_3.csv] phases detected: Phase 1 hkl, Phase 2 hkl
@@ -48,7 +48,7 @@ A cell holding something matplotlib does not know as a colour is reported and
 skipped, and that phase falls back to the colour cycle.
 
 `PHASE_COLORS` in `xrd_plotter.py` does the same for every sample at once,
-and the metadata wins over it. `PHASE_LABELS` sets the legend name when the
+and this file wins over it. `PHASE_LABELS` sets the legend name when the
 column header is not what you want printed, and a phase renamed there takes
 its colour under the new name. Both dictionaries ship empty.
 
@@ -60,21 +60,21 @@ its colour under the new name. Both dictionaries ship empty.
 - Two columns matching one phase print no percentage and say so, rather than
   picking one.
 - A column matching no phase in a file is reported for that file.
-- Without the metadata file, or for a data file with no row in it, the legend
-  falls back to the file name and the phase entries carry no percentage.
+- Without this file, or for a data file with no row in it, the legend falls
+  back to the file name and the phase entries carry no percentage.
 - Duplicate rows for one file are dropped after the first.
 
 ## Finding a window before you run the batch
 
 Section 4 of the notebook draws one file at a time. Pick it from the
 dropdown, type the 2θ and intensity limits, tick or untick the sqrt intensity
-and the `diff/sigma` panel, press **Apply**. An empty box leaves that end of
-the axis to the setting behind it, the `xp.PLOT_X_MIN` and `xp.PLOT_X_MAX`
-constants for 2θ and the data itself for the intensity. Nothing is written to
-`output/`.
+and the `diff/sigma` panel. The figure redraws on every change, a text box
+when you press Enter or leave it, a checkbox and the dropdown at once, and
+**Apply** redraws on demand. An empty box leaves that end of the axis to the
+setting behind it, the `xp.PLOT_X_MIN` and `xp.PLOT_X_MAX` constants for 2θ
+and the data itself for the intensity. Nothing is written to `output/`.
 
-Under the figure the panel prints the metadata line for the window you landed
-on:
+Under the figure the panel prints the row for the window you landed on:
 
 ```
 filename;formula;x_min;x_max

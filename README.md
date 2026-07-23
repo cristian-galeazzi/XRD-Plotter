@@ -59,11 +59,11 @@ data/                        <- your CSV exports go here
 output/                      <- created on the first run, the figures land here
 ```
 
-The first cell installs numpy, pandas, matplotlib, ipywidgets and pytest when
-they are missing, so you install nothing by hand. From a terminal,
-`pip install -r requirements.txt` does the same in one step. Tested on Python
-3.13 with numpy 2.4, pandas 3.0, matplotlib 3.10, ipywidgets 8.1 and pytest
-9.1.
+The first cell installs numpy, pandas, matplotlib, ipywidgets, IPython and
+pytest when they are missing, so you install nothing by hand. From a
+terminal, `pip install -r requirements.txt` does the same in one step. Tested
+on Python 3.13 with numpy 2.4, pandas 3.0, matplotlib 3.10, ipywidgets 8.1,
+IPython 9.11 and pytest 9.1.
 
 > [!TIP]
 > In VS Code, *Select Kernel* at the top right chooses which Python runs the
@@ -114,9 +114,11 @@ xp.PHASE_COLORS = {"phase 1": "#1f77b4"}  # pin a colour to a phase name
 | `USE_SQRT` | `True` | √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
 | `PHASE_COLORS`, `PHASE_LABELS` | empty | Colour and legend name per phase. The metadata file does the same, privately |
 
-Section 4 of the notebook draws one file with limits typed into boxes, and
-prints the metadata line for the window you settled on. Nothing is saved
-until you run the batch again.
+The batch cell shows each figure as it is drawn, with the files it was
+written to named underneath, so a long folder reports itself while it runs.
+Section 4 draws one file with limits typed into boxes and redraws on every
+change, then prints the metadata line for the window you settled on. Nothing
+there is saved until you run the batch again.
 
 ## What it accepts
 

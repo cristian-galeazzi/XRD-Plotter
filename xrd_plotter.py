@@ -554,11 +554,15 @@ def process_folder(data_folder, metadata_file, output_folder,
                         facecolor="white")
             fig.savefig(out_dir / f"{base}.png", dpi=DPI_EXPORT,
                         bbox_inches="tight", facecolor="white")
-            print(f"  OK   {f.name} -> {base}.pdf / .png")
             results.append((f.name, "ok", base))
 
-            if show:
+            # The figure goes out before the line that names its files, so a
+            # notebook shows each plot with its own caption underneath as the
+            # run proceeds. A file backend has no window and says so, so it
+            # is skipped rather than warned about.
+            if show and plt.get_backend().lower() != "agg":
                 plt.show()
+            print(f"  OK   {f.name} -> {base}.pdf / .png")
             plt.close(fig)  # release memory between files
         except Exception as e:
             print(f"  SKIP {f.name}: {e}")
