@@ -10,12 +10,19 @@ in the upper panel, reflection positions underneath, residuals below, written
 out as a 600 dpi image and a vector PDF. You drop your files in a folder and
 press run. One run processes the whole folder.
 
-![Two-panel Rietveld figure built from synthetic data: black observed points, red calculated fit, grey dashed background, one row of coloured reflection ticks per phase, and a lower panel of weighted residuals.](docs/example.png)
+| `USE_SQRT = True`, `WEIGHTED_RESIDUALS = True` | `USE_SQRT = False`, `WEIGHTED_RESIDUALS = False` |
+|---|---|
+| ![Two-panel Rietveld figure on a square-root intensity axis: black observed points, red calculated fit, grey dashed background, one row of coloured reflection ticks per phase, and a lower panel of weighted residuals.](docs/example_sqrt.png) | ![The same pattern on a linear intensity axis, with the raw difference in counts in the lower panel, where the strongest reflection dominates both panels.](docs/example_counts.png) |
 
-The figure above is drawn from an invented pattern, with two phases named
-`Phase 1` and `Phase 2`, so it shows the layout and no measurement. Your own
-phase names replace them, and the tick colours follow the order in the
-legend.
+Same pattern, the two settings that change what you see. The square root
+keeps the weak reflections visible and `diff/sigma` holds the residuals in a
+band a few units wide. The linear axis and the raw difference show the counts
+as they are, with the strongest reflection dominating both panels.
+
+Both figures come from an invented pattern with two phases named `Phase 1`
+and `Phase 2`, drawn by [`docs/make_examples.py`](docs/make_examples.py), so
+they show the layout and no measurement. Your own phase names replace them,
+and the tick colours follow the order in the legend.
 
 ## Quick start
 
