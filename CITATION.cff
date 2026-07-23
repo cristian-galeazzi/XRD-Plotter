@@ -20,7 +20,9 @@ abstract: >-
   read from a separate metadata file kept out of the repository. An
   optional panel replots one file with different limits before the batch is
   repeated. Parsing is bit-exact for both decimal marks and is asserted
-  against synthetic data with zero tolerance.
+  against synthetic data with zero tolerance. The routines live in a plain
+  Python module, so the notebook, the test suite and any script share one
+  implementation.
 repository-code: "https://github.com/cristian-galeazzi/XRD-Plotter"
 version: 1.0.0
 date-released: 2026-07-30

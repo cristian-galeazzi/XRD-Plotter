@@ -21,8 +21,7 @@ as they are, with the strongest reflection dominating both panels.
 
 Both figures come from an invented pattern with two phases named `Phase 1`
 and `Phase 2`, drawn by [`docs/make_examples.py`](docs/make_examples.py), so
-they show the layout and no measurement. Your own phase names replace them,
-and the tick colours follow the order in the legend.
+they show the layout and no measurement. Your own phase names replace them.
 
 ## Quick start
 
@@ -31,8 +30,8 @@ at step 3.
 
 1. **Install Python** (3.10 or newer). On Windows, take the installer from
    [python.org](https://www.python.org/downloads/) and tick **Add python.exe
-   to PATH** on the first screen. Everything else assumes it. macOS and Linux
-   usually ship a suitable Python already.
+   to PATH** on the first screen. macOS and Linux usually ship a suitable
+   Python already.
 
 2. **Install a notebook editor.** [VS Code](https://code.visualstudio.com/)
    is free and works the same on Windows, macOS and Linux. It offers to
@@ -46,61 +45,31 @@ at step 3.
    files in the `data/` folder beside it, and press *Run All*.
 
 5. *(Optional)* **Put `Samples_metadata.csv` beside the notebook**, not in
-   `data/`, to print real sample names and phase fractions in the legends.
-   See [Sample metadata](#sample-metadata-stays-out-of-the-repository) for
-   the one required column.
+   `data/`, to print real sample names, phase fractions and phase colours in
+   the legends. See [the metadata reference](docs/metadata.md).
 
-You end up with this beside the notebook. You add files to `data/` only:
+You end up with this. You add files to `data/` only:
 
 ```
-XRD_Rietveld_Plotter.ipynb
-Samples_metadata.csv     <- optional, yours, never committed
-data/                    <- your CSV exports go here
-output/                  <- created on the first run, the figures land here
+XRD_Rietveld_Plotter.ipynb   <- the four sections you run
+xrd_plotter.py               <- the engine, imported by the notebook
+test_xrd_plotter.py          <- the validation suite
+Samples_metadata.csv         <- optional, yours, never committed
+data/                        <- your CSV exports go here
+output/                      <- created on the first run, the figures land here
 ```
 
-The first cell installs numpy, pandas, matplotlib and ipywidgets when they
-are missing, so you install nothing by hand. `data/` is created when absent,
-and `output/` appears with the first figure, so a download or an unzip
-dropping the empty folders breaks nothing. Each figure appears under the
-batch cell and is written to `output/` as a PDF and a PNG.
+The first cell installs numpy, pandas, matplotlib, ipywidgets and pytest when
+they are missing, so you install nothing by hand. From a terminal,
+`pip install -r requirements.txt` does the same in one step. Tested on Python
+3.13 with numpy 2.4, pandas 3.0, matplotlib 3.10, ipywidgets 8.1 and pytest
+9.1.
 
-From a terminal, `pip install -r requirements.txt` installs the four
-libraries in one step, and the notebook then opens in any Jupyter host you
-already have. Tested on Python 3.13 with numpy 2.4, pandas 3.0, matplotlib
-3.10 and ipywidgets 8.1.
-
-The notebook has four sections:
-
-1. Setup and the plotting routines.
-2. A self-check on synthetic data.
-3. The batch run over `data/`.
-4. A panel for trying a different window on one file.
-
-The four batch settings sit in section 3 and default to `"data"`,
-`"Samples_metadata.csv"`, `"output"` and `USE_SQRT = True`.
-
-### Working in VS Code
-
-*Select Kernel*, at the top right of the notebook, chooses which Python runs
-it. A package looks missing right after you installed it? The notebook is
-almost always running on a different Python from the one you installed into.
-Pick the other kernel and run again.
-
-### Working in Google Colab
-
-> [!CAUTION]
-> Colab means uploading your patterns to Google. Every file you drag into the
-> Files sidebar leaves your machine and is processed on someone else's
-> infrastructure. An embargo, a group policy or a collaboration agreement
-> might forbid this, and a diffraction pattern of an unpublished sample is
-> exactly the kind of file you do not own alone. Check before you upload. For
-> your own unpublished measurements, run locally instead. It costs one
-> `pip install` and your files never leave your machine.
-
-Once that is settled, upload `XRD_Rietveld_Plotter.ipynb` through *File →
-Upload notebook* and run all cells. The `data/` folder is created for you.
-Drag your CSV files into it from the Files sidebar and re-run the batch cell.
+> [!TIP]
+> In VS Code, *Select Kernel* at the top right chooses which Python runs the
+> notebook. A package looks missing right after you installed it? The
+> notebook is almost always running on a different Python from the one you
+> installed into. Pick the other kernel and run again.
 
 ## What you get
 
@@ -126,278 +95,79 @@ arbitrary units. An axis of tick labels invites the reader to compare values
 across measurements where no comparison holds, and the space works harder for
 the pattern.
 
-**The 2θ axis shows everything you measured, unless you say otherwise.**
-`PLOT_X_MIN` and `PLOT_X_MAX` start at `None`, so each figure spans its own
-measured range. Give them numbers to hold every figure to one window, or put
-`x_min` and `x_max` in the metadata row of a single sample. The metadata pair
-wins over the constants. The intensity axis and the tick rows are scaled on
-the part of the pattern the window shows, so cropping away the strongest
-reflection lifts what is left instead of flattening it.
+## Settings
 
-**`WEIGHTED_RESIDUALS` picks the residual in the lower panel.** The default
-`True` draws `diff/sigma`, the residual divided by the standard deviation of
-the point, so a good refinement stays inside a band a few units wide whatever
-the count rate. Set it to `False` to draw the raw `diff` in counts, where the
-tall reflections dominate the panel. The axis label follows the setting.
+The engine lives in [`xrd_plotter.py`](xrd_plotter.py) and the notebook
+imports it as `xp`. Override a constant on the module, so every routine sees
+it:
 
-**`USE_SQRT` changes what you see, never what is read.** Plotting √I instead
-of I compresses the dynamic range, so weak reflections stay visible beside a
-strong one. This is conventional in Rietveld figures. The transform touches
-the drawn copy alone. Nothing is written back, and the residual panel stays
-untouched.
-
-## Which GSAS-II export to use
-
-> [!IMPORTANT]
-> GSAS-II has two CSV exports and one of them works here. Take the one behind
-> the plot, not the one in the menu bar.
-
-- **Use this.** On the refined powder pattern, open the publication-plot
-  dialog and *Save* it with `csv` as the format. Internally this is
-  `CopyRietveld2csv`. It writes one row per data point under a single header
-  row. Files from it are read unmodified. You edit nothing.
-- **Not this.** *Export → Powder data as → histogram CSV file* writes a block
-  of quoted `"Histogram"`, `"Instparm: …"` and `"Samparm: …"` lines above the
-  data, and names its columns `x, y_obs, weight, y_calc, y_bkg, Q`. The
-  preamble alone makes it unreadable here. It also carries no residuals and
-  no reflection positions, so editing recovers nothing.
-
-The usable export contains, in this order: `used`, `x, 2theta (deg)`, `obs`,
-`calc`, `bkg`, `diff`, then **one column per phase, labelled with the phase
-name from your project**, then `tick-pos`, `diff/sigma` and `Axis-limits`.
-The notebook reads what it needs and ignores the rest.
-
-| Column | Header must | Required | Content |
-|---|---|---|---|
-| 2θ | contain `2theta` or `x,`, as `x, 2theta (deg)` does | Yes | Diffraction angle in degrees |
-| Observed | be `obs` | No, though the figure is empty without it | Measured pattern |
-| Calculated | be `calc` | No | Refined pattern |
-| Background | be `bkg` | No | Refined background |
-| Residuals | be `diff/sigma`, or `diff` with `WEIGHTED_RESIDUALS = False` | Yes | Drawn in the lower panel |
-| Reflection positions, one column per phase | carry the phase name from your project | No | 2θ positions for that phase's tick row |
-
-Matching ignores case and tolerates extra text, so `obs` and `Obs` name the
-same column, and both `Phase 1` and `Phase 1 hkl` are recognised. Two
-columns are required, the 2θ and the residuals. A missing `obs`, `calc` or
-`bkg` is filled with zeros and reported on screen, so a partial file still
-draws. The residual column is the exception. Zeros there draw a flat lower
-panel, which reads as a perfect fit, so the file is skipped with `residual
-column 'diff/sigma' not found`.
-
-**Phases are found by elimination, not from a list of names.** The notebook
-knows the headers GSAS-II writes itself, `used`, `diff`, `tick-pos`,
-`Axis-limits`, `excluded` and the pattern columns above, listed in
-`NON_PHASE_COLUMNS`. Any other column counts as a phase when it fills at most
-half the rows, the share in `PHASE_MAX_FILL`. A column above that share is
-named on screen and left undrawn rather than dropped in silence, so a
-reflection list dense enough to cross the ceiling tells you why it is
-missing. A header repeated in the export, which pandas renames `tick-pos.1`,
-is matched against the blocklist without its suffix. Your phase names need no
-configuration. Name them as you like in GSAS-II and they arrive in the
-legend. Every run prints the phases it found, per file, so a column read the
-wrong way shows up at once.
-
-The phase columns are shorter than the pattern. They hold their few
-reflection positions, the remaining cells stay blank, and each column is
-trimmed on its own.
-
-**Fit statistics are not drawn on the figure.** No CSV export carries the
-goodness of fit or a weighted profile R factor. Reading one back from a
-column you added by hand would attach a number to the figure with nothing in
-this notebook to check it against. Put the numbers in the sample name
-instead. The `formula` field is free text and reaches the legend verbatim, so
-`Sample 3, wR = 4.2%` renders as written.
-
-| Feature | Behaviour |
-|---------|-----------|
-| Field separator | `;` and `,` are both detected |
-| Decimal mark | `.` and `,` are both accepted, so a locale export needs no editing |
-| Text encoding | UTF-8, with Latin-1 fallback |
-| Unreadable or malformed file | Reported with its reason and skipped, and the rest of the batch still runs |
-| Rows with more fields than the header | Skipped and counted on screen, and the rest of the file keeps its precision |
-| Non-numeric cells inside a valid column | Become NaN, counted, reported, and masked out of the plot |
-| A 2θ or `obs` column with no numeric cell at all | The file is isolated with that reason, since nothing is left to draw |
-
-Nothing in the parser is specific to GSAS-II. An export from another
-refinement program is read as soon as its columns carry the headers above, in
-any order.
-
-## Find the window before you run the batch
-
-Section 4 draws one file at a time. Pick it from the dropdown, type the 2θ
-and intensity limits, tick or untick the sqrt intensity and the `diff/sigma`
-panel, press **Apply**. An empty box leaves that end of the axis to the
-setting behind it, the constants for 2θ and the data for the intensity.
-Nothing is written to `output/`.
-
-Under the figure the panel prints the metadata line for the window you landed
-on:
-
-```
-filename;formula;x_min;x_max
-sample_3.csv;Sample 3;15;80
+```python
+xp.PLOT_X_MIN, xp.PLOT_X_MAX = 13, 85     # fix the 2theta window
+xp.WEIGHTED_RESIDUALS = False             # raw diff in the lower panel
+xp.PHASE_COLORS = {"phase 1": "#1f77b4"}  # pin a colour to a phase name
 ```
 
-Paste it into `Samples_metadata.csv` and section 3 draws that sample this way
-on every run. The intensity limits stay in the panel, since they depend on
-`USE_SQRT` and describe a look rather than a fact about the sample.
+| Setting | Default | Effect |
+|---|---|---|
+| `PLOT_X_MIN`, `PLOT_X_MAX` | `None` | The 2θ window. `None` draws the measured range of each file. `x_min` and `x_max` in the metadata win over these, per sample |
+| `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `diff` in counts when `False`. The axis label follows |
+| `USE_SQRT` | `True` | √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
+| `PHASE_COLORS`, `PHASE_LABELS` | empty | Colour and legend name per phase. The metadata file does the same, privately |
 
-## Sample metadata stays out of the repository
+Section 4 of the notebook draws one file with limits typed into boxes, and
+prints the metadata line for the window you settled on. Nothing is saved
+until you run the batch again.
 
-Your file names are usually internal sample codes, and the figure needs a
-real name and the phase fractions. Both come from an optional
-`Samples_metadata.csv` placed **beside the notebook**, one row per data file,
-matched on the exact file name:
+## What it accepts
 
-| Column | Required | Content |
-|--------|----------|---------|
-| `filename` (or `file`) | Yes | Name of the data file this row describes |
-| `formula` | No | Display name for the figure legend |
-| `<phase>_pct`, one per phase | No | Fraction (%) appended to that phase's legend entry |
-| `<phase>_color`, one per phase | No | Tick and legend colour for that phase, as `#RRGGBB` or a matplotlib colour name |
-| `x_min`, `x_max` | No | 2θ window for this sample alone, in degrees |
+The CSV that the GSAS-II publication-plot dialog saves, not the one from
+*Export → Powder data as*. The 2θ column and a residual column are required,
+`obs`, `calc` and `bkg` are filled with zeros when absent, and every other
+column that holds only a handful of values is read as the reflection
+positions of a phase. Phase names come from your project and need no
+configuration.
 
-Name a fraction or colour column after its phase. `phase_1_pct` feeds the
-`Phase 1` entry, `phase_1_color` paints it. The part before the suffix is
-matched inside the legend name, with underscores read as spaces, so a
-fragment of the name is enough. Decimal commas work here too.
+Both field separators, both decimal marks, UTF-8 and Latin-1, and rows longer
+than the header are handled. A file that cannot be drawn is reported with its
+reason while the rest of the batch runs.
 
-Colours in the metadata keep the phase palette in your own private file
-rather than in the notebook. With `phase_1_color;phase_2_color` set to
-`#1f77b4;#EE8031`, a run prints what it used, so you read the mapping back
-without opening the figure:
-
-```
-[sample_3.csv] phases detected: Phase 1 hkl, Phase 2 hkl
-  colours: Phase 1 #1f77b4, Phase 2 #EE8031
-```
-
-A cell holding something matplotlib does not know as a colour is reported and
-skipped, and that phase falls back to the cycle. When two columns match one
-phase, the longer name wins, so `phase_1_color` beats a general
-`phase_color`.
-
-A fraction of zero, or a column you left out, prints the phase with no
-percentage rather than `0%`. An empty `formula` cell falls back to the file
-name. Two columns matching one phase print no percentage and say so, rather
-than picking one. A column matching no phase in a file is reported for that
-file.
-
-Without the metadata file, or for a data file with no row in it, the legend
-falls back to the file name and the phase entries carry no percentage.
-Duplicate rows for one file are dropped after the first.
-
-Keeping this file outside `data/` is deliberate. It is the one place where
-sample identities live, so it stays a single file you control, and
-[`.gitignore`](.gitignore) excludes it by name.
+Full contract: [docs/input-format.md](docs/input-format.md).
 
 ## Limitations
 
-**An unknown sparse column is read as a phase.** Detection works by
-elimination, so an extra column in your export, holding a handful of values
-under a header the notebook does not know, gets its own tick row and legend
-entry. Add its header to `NON_PHASE_COLUMNS` to ignore it again. This is why
-every run prints the phases it detected.
+- **An unknown sparse column is read as a phase.** Detection works by
+  elimination, so an extra column holding a handful of values gets its own
+  tick row. Add its header to `NON_PHASE_COLUMNS` to ignore it.
+- **Tick colours follow the legend order unless you pin them.** A sample
+  missing one phase paints the remaining one with the colour above it. Pin
+  them in the metadata, or in `PHASE_COLORS`, to keep a series comparable.
+- **A fixed 2θ window hides data without saying so.** The intensity axis
+  rescales to what is left, so two figures cropped differently are no longer
+  comparable by height.
+- **It draws what the export contains and cannot judge it.** A refinement
+  converged on the wrong structure still produces a clean-looking figure.
 
-**Tick colours follow the legend order unless you pin them.** With nothing
-configured, the first phase in the legend takes the first colour of
-`PHASE_COLOR_CYCLE`, so a sample missing one phase paints the remaining one
-with the colour of the phase above it. Pin the colours to keep a series
-comparable, either in the metadata with `<phase>_color`, which stays private,
-or in `PHASE_COLORS` in the routines cell, which travels with the notebook.
-The metadata wins over `PHASE_COLORS`, and both are keyed by a fragment of
-the name printed in the legend. `PHASE_LABELS` sets that name when the column
-header is not what you want printed, so a phase you rename there takes its
-colour under the new name. All three dictionaries ship empty.
+## Validation
 
-**A fixed 2θ window hides data without saying so.** `PLOT_X_MIN` and
-`PLOT_X_MAX` default to `None` and draw the measured range of each file. Set
-them, or set `x_min` and `x_max` for one sample, and everything outside is
-parsed, masked and never shown, with no warning. The intensity axis then
-rescales to what is left, so two figures cropped differently are no longer
-comparable by height. Prefer the per-sample columns when one pattern alone
-needs cropping.
+Parsing is bit-exact: every numeric column is read as text and converted with
+Python's `float()` rather than the pandas C parser, which is not correctly
+rounded. [`test_xrd_plotter.py`](test_xrd_plotter.py) asserts that with
+`array_equal`, at zero tolerance, on synthetic exports it builds itself, and
+covers the phase rules, the metadata binding, the window, the residual choice
+and the batch. Run it with `pytest -q`, or run the notebook, which calls it.
+CI does both on every push.
 
-**It draws what the export contains and cannot judge it.** The residual panel
-is copied from the refinement, not recomputed. A refinement converged on the
-wrong structure still produces a clean-looking figure. The plotting is
-validated. The crystallography stays yours.
+Details: [docs/validation.md](docs/validation.md).
 
-## How it works and how it was checked
+## Privacy
 
-Parsing is the one place where numbers take damage, so it avoids the single
-lossy step available to it. Every numeric column is read as text and
-converted with Python's built-in `float()` rather than pandas' fast C
-converter, which is not correctly rounded and lands up to one unit in the
-last place away from the nearest double. Both decimal marks go through the
-same conversion, so an export with decimal commas parses to the same doubles
-as the same export with decimal points. Everything downstream is IEEE-754
-double precision with no intermediate rounding. Numbers are rounded only when
-printed on the figure, and √I is applied to the drawn copy alone.
+No experimental data is in this repository and none must ever be committed.
+`data/`, `output/` and `Samples_metadata.csv` are excluded by
+[`.gitignore`](.gitignore), notebook outputs are stripped before every
+commit, and your phase names belong in the metadata file rather than in the
+notebook.
 
-Section 2 builds synthetic exports at run time from an analytic pattern with
-a fixed seed (`default_rng(0)`) and asserts:
-
-| Case | Purpose |
-|------|---------|
-| Semicolon separator, decimal commas | Bit-exact parsing of a locale export, asserted with `array_equal`, at zero tolerance |
-| Comma separator, decimal points, `x, deg` header | The same doubles from the other header and locale variant |
-| Both variants | Both phase columns detected and trimmed independently |
-| A file of arbitrary bytes | Isolated with a reason instead of raising |
-| A CSV with no 2θ column | Isolated as `2theta column not found` |
-| A CSV with only 2θ and `Obs` | Isolated as `residual column 'diff/sigma' not found` |
-| A CSV with 2θ, `Obs` and `diff/sigma` | `calc` and `bkg` filled with zeros, reported, still plotted |
-| A CSV whose `Obs` column is all text | Isolated as `no valid data in the obs column` |
-| A CSV with one over-long row | The row skipped and counted, every other row still bit-exact |
-| A complete export, phases named `Alpha` and `Beta` | Only the two phases detected among eleven columns, `tick-pos` and `Axis-limits` left alone |
-| A header repeated in the export | The `tick-pos.1` pandas invents is still blocklisted, not drawn as a phase |
-| A column too full to be a reflection list | Reported by name and left undrawn |
-| A synthetic metadata row | Name and both phase fractions arrive in the legend text |
-| A third phase, and two columns of one phase | Legend in alphabetical order, one tick row each, the cycle in that order, a repeated label taking one entry and one colour |
-| A `<phase>_color` cell, and one holding text that is not a colour | The colour follows its phase alone and beside another, the invalid cell is reported and falls back to the cycle |
-| A general and a specific `_color` key, and a column named only `_pct` | The longer key wins, the nameless column matches no phase |
-| `PHASE_LABELS` and `PHASE_COLORS` set together | The renamed phase prints its new name and keeps the colour keyed to it |
-| Metadata with a decimal comma, an empty `formula`, an unmatched `_pct` column, two columns matching one phase | 60,5 read as 60.5, the file name used as the legend name, both mismatches reported, no percentage guessed |
-| The window unset, then the constants, then `x_min`/`x_max` in the metadata | The measured range, then the constants, then the per-sample pair, each overriding the one before, with the intensity axis rescaled to the window |
-| The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
-| The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
-| A folder whose middle file is unusable | It is reported with its reason and the files after it are still drawn |
-
-The section raises `AssertionError` on the first failure, so executing the
-notebook is a test run:
-
-```bash
-python -m nbconvert --to notebook --execute --output executed.ipynb XRD_Rietveld_Plotter.ipynb
-```
-
-CI runs this on every push, on the Python floor claimed above and on the
-version this is developed with. Only synthetic data is used, so the check
-runs anywhere, including on a fresh clone with an empty `data/`.
-
-## Privacy: nothing private gets published
-
-This repository holds no experimental or personal data, and none must ever be
-committed or published. Three layers enforce this:
-
-1. **Ignored paths.** `data/`, `output/` and `Samples_metadata.csv` are
-   excluded in [`.gitignore`](.gitignore). The self-check uses synthetic
-   patterns only.
-2. **Stripped notebook outputs.** Executed cells embed their results,
-   figures and sample names included, inside the `.ipynb` file. Strip them
-   before every commit:
-
-   ```bash
-   jupyter nbconvert --clear-output --inplace XRD_Rietveld_Plotter.ipynb
-   ```
-
-3. **Automatic strip on commit (recommended).** Install
-   [nbstripout](https://github.com/kynan/nbstripout) once per clone. Git then
-   strips outputs at commit time, and a forgotten manual strip leaks nothing:
-
-   ```bash
-   pip install nbstripout
-   nbstripout --install        # run inside the git repository
-   ```
+Procedure: [docs/privacy.md](docs/privacy.md).
 
 ## How to cite
 

@@ -1,0 +1,67 @@
+# How it works and how it was checked
+
+## Precision
+
+Parsing is the one place where numbers take damage, so it avoids the single
+lossy step available to it. Every numeric column is read as text and
+converted with Python's built-in `float()` rather than pandas' fast C
+converter, which is not correctly rounded and lands up to one unit in the
+last place away from the nearest double. Both decimal marks go through the
+same conversion, so an export with decimal commas parses to the same doubles
+as the same export with decimal points. Everything downstream is IEEE-754
+double precision with no intermediate rounding. Numbers are rounded only when
+printed on the figure, and √I is applied to the drawn copy alone.
+
+## Running the suite
+
+[`test_xrd_plotter.py`](../test_xrd_plotter.py) builds synthetic exports at
+run time from an analytic pattern with a fixed seed (`default_rng(0)`). It
+reads nothing from `data/`, so it runs on any machine, including a fresh
+clone with an empty data folder.
+
+```bash
+pytest -q
+```
+
+Section 2 of the notebook calls the same suite, so running the notebook is a
+test run as well:
+
+```bash
+python -m nbconvert --to notebook --execute --output executed.ipynb XRD_Rietveld_Plotter.ipynb
+```
+
+CI runs both on every push, on the Python floor the README claims and on the
+version this is developed with.
+
+## What the suite asserts
+
+| Case | Purpose |
+|------|---------|
+| Semicolon separator, decimal commas | Bit-exact parsing of a locale export, asserted with `array_equal`, at zero tolerance |
+| Comma separator, decimal points, `x, deg` header | The same doubles from the other header and locale variant |
+| Both variants | Both phase columns detected and trimmed independently |
+| A file of arbitrary bytes | Isolated with a reason instead of raising |
+| A CSV with no 2θ column | Isolated as `2theta column not found` |
+| A CSV with only 2θ and `Obs` | Isolated as `residual column 'diff/sigma' not found` |
+| A CSV whose `Obs` column is all text | Isolated as `no valid data in the obs column` |
+| A CSV with 2θ, `Obs` and `diff/sigma` | `calc` and `bkg` filled with zeros, still plotted |
+| A CSV with one over-long row | The row skipped and counted, every other row still bit-exact |
+| A complete export, phases named `Alpha` and `Beta` | Only the two phases detected among eleven columns, `tick-pos` and `Axis-limits` left alone |
+| A header repeated in the export | The `tick-pos.1` pandas invents is still blocklisted, not drawn as a phase |
+| A column too full to be a reflection list | Reported by name and left undrawn |
+| A synthetic metadata row | Name and both phase fractions arrive in the legend text |
+| A third phase, and two columns of one phase | Legend in alphabetical order, one tick row each, the cycle in that order, a repeated label taking one entry and one colour |
+| A `<phase>_color` cell, and one holding text that is not a colour | The colour follows its phase alone and beside another, the invalid cell falls back to the cycle |
+| A general and a specific `_color` key, and a column named only `_pct` | The longer key wins, the nameless column matches no phase |
+| `PHASE_LABELS` and `PHASE_COLORS` set together | The renamed phase prints its new name and keeps the colour keyed to it |
+| Metadata with a decimal comma, an empty `formula`, an unmatched `_pct` column, two columns matching one phase | 60,5 read as 60.5, the file name used as the legend name, both mismatches reported, no percentage guessed |
+| The window unset, then the constants, then `x_min`/`x_max` in the metadata | Each overrides the one before, with the intensity axis rescaled to the window |
+| The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
+| The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
+| A folder whose middle file is unusable | It is reported with its reason and the files after it are still drawn |
+
+## What validation does not cover
+
+The plotting is checked. The crystallography is yours. The residual panel is
+copied from the refinement, not recomputed, so a refinement converged on the
+wrong structure still produces a clean-looking figure.
