@@ -70,11 +70,11 @@ Section 4 of the notebook draws one file at a time. Pick it from the
 dropdown, type the 2θ and intensity limits, tick or untick the sqrt intensity
 and the `diff/sigma` panel. The figure redraws on every change, a text box
 when you press Enter or leave it, a checkbox and the dropdown at once, and
-**Apply** redraws on demand. An empty box leaves that end of the axis to the
+**Save to output** writes the window on screen to `output/`, at full resolution, under the same name section 3 uses. An empty box leaves that end of the axis to the
 setting behind it, the `xp.PLOT_X_MIN` and `xp.PLOT_X_MAX` constants for 2θ
 and the data itself for the intensity. Nothing is written to `output/`.
 
-Under the figure the panel prints the row for the window you landed on:
+Above the figure the panel prints the row for the window you landed on:
 
 ```
 filename;formula;x_min;x_max
