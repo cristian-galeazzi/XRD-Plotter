@@ -1,0 +1,61 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "XRD Rietveld Plot Generator: a validated Jupyter notebook for publication-quality Rietveld plots from GSAS-II CSV exports"
+type: software
+authors:
+  - family-names: Galeazzi
+    given-names: Cristian
+    orcid: "https://orcid.org/0009-0006-7150-2659"
+    affiliation: "Center for Materials Research (ZfM/LaMa), Justus Liebig University Giessen, Germany"
+abstract: >-
+  Turns the CSV a Rietveld refinement saves from its pattern plot into a
+  publication-ready two-panel figure. The upper panel holds the observed,
+  calculated and background patterns with one row of reflection markers per
+  phase, the lower panel holds the weighted or unweighted residuals, and
+  both are saved as a 600 dpi raster and a vector PDF. Phases are detected
+  from the export itself rather than from a list of names, so any refined
+  system is plotted without configuration. Every file in a folder is
+  processed in one run, unreadable files are isolated without stopping the
+  batch, and sample names, phase fractions and per-sample plot windows are
+  read from a separate metadata file kept out of the repository. An
+  optional panel replots one file with different limits before the batch is
+  repeated. Parsing is bit-exact for both decimal marks and is asserted
+  against synthetic data with zero tolerance.
+repository-code: "https://github.com/cristian-galeazzi/XRD-Plotter"
+version: 1.0.0
+date-released: 2026-07-30
+license: MIT
+keywords:
+  - X-ray diffraction
+  - powder diffraction
+  - Rietveld refinement
+  - GSAS-II
+  - scientific visualization
+  - matplotlib
+  - Jupyter notebook
+  - reproducible research
+references:
+  - type: article
+    title: "GSAS-II: the genesis of a modern open-source all purpose crystallography software package"
+    authors:
+      - family-names: Toby
+        given-names: Brian H.
+      - family-names: Von Dreele
+        given-names: Robert B.
+    journal: "Journal of Applied Crystallography"
+    volume: 46
+    start: 544
+    end: 549
+    year: 2013
+    doi: 10.1107/S0021889813003531
+  - type: article
+    title: "Matplotlib: A 2D Graphics Environment"
+    authors:
+      - family-names: Hunter
+        given-names: John D.
+    journal: "Computing in Science & Engineering"
+    volume: 9
+    start: 90
+    end: 95
+    year: 2007
+    doi: 10.1109/MCSE.2007.55

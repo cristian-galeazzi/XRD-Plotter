@@ -1,0 +1,37 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# a new push supersedes the running build for the same ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  notebook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # the floor the README claims, and the version it is developed on
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      # nbconvert and ipykernel are not runtime dependencies: they belong to
+      # whatever Jupyter host the reader already has, not to requirements.txt.
+      - name: Install dependencies
+        run: pip install -r requirements.txt nbconvert ipykernel
+      # Section 2 of the notebook is the validation suite and raises
+      # AssertionError on failure, so executing the notebook runs the tests.
+      # Section 3 finds data/ empty and reports it instead of failing.
+      - name: Execute the notebook
+        run: python -m nbconvert --to notebook --execute --output executed.ipynb XRD_Rietveld_Plotter.ipynb

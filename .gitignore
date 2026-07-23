@@ -1,0 +1,31 @@
+# Private measurement data and metadata: keep the folders, never their contents
+data/*
+!data/.gitkeep
+output/*
+!output/.gitkeep
+Samples_metadata.csv
+*.csv
+
+# Editor and Jupyter / Python artifacts
+.vscode/
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Mac files
+.DS_Store
+._*
+
+# Env/secrets and Virtual env
+.venv/
+venv/
+env/
+.env
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+
