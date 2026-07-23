@@ -53,10 +53,10 @@ output/                  <- created on the first run, the figures land here
 ```
 
 The first cell installs numpy, pandas, matplotlib and ipywidgets when they
-are missing, so you install nothing by hand. Both folders are created when
-absent, so a download or an unzip dropping the empty ones breaks nothing.
-Each figure appears under the batch cell and is written to `output/` as a PDF
-and a PNG.
+are missing, so you install nothing by hand. `data/` is created when absent,
+and `output/` appears with the first figure, so a download or an unzip
+dropping the empty folders breaks nothing. Each figure appears under the
+batch cell and is written to `output/` as a PDF and a PNG.
 
 From a terminal, `pip install -r requirements.txt` installs the four
 libraries in one step, and the notebook then opens in any Jupyter host you
@@ -123,7 +123,9 @@ the pattern.
 `PLOT_X_MIN` and `PLOT_X_MAX` start at `None`, so each figure spans its own
 measured range. Give them numbers to hold every figure to one window, or put
 `x_min` and `x_max` in the metadata row of a single sample. The metadata pair
-wins over the constants.
+wins over the constants. The intensity axis and the tick rows are scaled on
+the part of the pattern the window shows, so cropping away the strongest
+reflection lifts what is left instead of flattening it.
 
 **`WEIGHTED_RESIDUALS` picks the residual in the lower panel.** The default
 `True` draws `diff/sigma`, the residual divided by the standard deviation of
@@ -179,10 +181,14 @@ column 'diff/sigma' not found`.
 knows the headers GSAS-II writes itself, `used`, `diff`, `tick-pos`,
 `Axis-limits`, `excluded` and the pattern columns above, listed in
 `NON_PHASE_COLUMNS`. Any other column counts as a phase when it fills at most
-half the rows. A reflection list always does, a data column never does. Your
-phase names need no configuration. Name them as you like in GSAS-II and they
-arrive in the legend. Every run prints the phases it found, per file, so a
-column read the wrong way shows up at once.
+half the rows, the share in `PHASE_MAX_FILL`. A column above that share is
+named on screen and left undrawn rather than dropped in silence, so a
+reflection list dense enough to cross the ceiling tells you why it is
+missing. A header repeated in the export, which pandas renames `tick-pos.1`,
+is matched against the blocklist without its suffix. Your phase names need no
+configuration. Name them as you like in GSAS-II and they arrive in the
+legend. Every run prints the phases it found, per file, so a column read the
+wrong way shows up at once.
 
 The phase columns are shorter than the pattern. They hold their few
 reflection positions, the remaining cells stay blank, and each column is
@@ -203,6 +209,7 @@ instead. The `formula` field is free text and reaches the legend verbatim, so
 | Unreadable or malformed file | Reported with its reason and skipped, and the rest of the batch still runs |
 | Rows with more fields than the header | Skipped and counted on screen, and the rest of the file keeps its precision |
 | Non-numeric cells inside a valid column | Become NaN, counted, reported, and masked out of the plot |
+| A 2θ or `obs` column with no numeric cell at all | The file is isolated with that reason, since nothing is left to draw |
 
 Nothing in the parser is specific to GSAS-II. An export from another
 refinement program is read as soon as its columns carry the headers above, in
@@ -212,7 +219,8 @@ any order.
 
 Section 4 draws one file at a time. Pick it from the dropdown, type the 2θ
 and intensity limits, tick or untick the sqrt intensity and the `diff/sigma`
-panel, press **Apply**. An empty box lets that end of the axis fit the data.
+panel, press **Apply**. An empty box leaves that end of the axis to the
+setting behind it, the constants for 2θ and the data for the intensity.
 Nothing is written to `output/`.
 
 Under the figure the panel prints the metadata line for the window you landed
@@ -248,8 +256,9 @@ matched inside the legend name, with underscores read as spaces, so a
 fragment of the name is enough. Decimal commas work here too.
 
 Colours in the metadata keep the phase palette in your own private file
-rather than in the notebook. Each run prints what it used, so you always
-read the mapping back:
+rather than in the notebook. With `phase_1_color;phase_2_color` set to
+`#1f77b4;#EE8031`, a run prints what it used, so you read the mapping back
+without opening the figure:
 
 ```
 [sample_3.csv] phases detected: Phase 1 hkl, Phase 2 hkl
@@ -257,7 +266,9 @@ read the mapping back:
 ```
 
 A cell holding something matplotlib does not know as a colour is reported and
-skipped, and that phase falls back to the cycle.
+skipped, and that phase falls back to the cycle. When two columns match one
+phase, the longer name wins, so `phase_1_color` beats a general
+`phase_color`.
 
 A fraction of zero, or a column you left out, prints the phase with no
 percentage rather than `0%`. An empty `formula` cell falls back to the file
@@ -287,14 +298,18 @@ configured, the first phase in the legend takes the first colour of
 with the colour of the phase above it. Pin the colours to keep a series
 comparable, either in the metadata with `<phase>_color`, which stays private,
 or in `PHASE_COLORS` in the routines cell, which travels with the notebook.
-`PHASE_LABELS` does the same for a legend name different from the column
-header. Both dictionaries ship empty.
+The metadata wins over `PHASE_COLORS`, and both are keyed by a fragment of
+the name printed in the legend. `PHASE_LABELS` sets that name when the column
+header is not what you want printed, so a phase you rename there takes its
+colour under the new name. All three dictionaries ship empty.
 
 **A fixed 2θ window hides data without saying so.** `PLOT_X_MIN` and
 `PLOT_X_MAX` default to `None` and draw the measured range of each file. Set
 them, or set `x_min` and `x_max` for one sample, and everything outside is
-parsed, masked and never shown, with no warning. Prefer the per-sample
-columns when one pattern alone needs cropping.
+parsed, masked and never shown, with no warning. The intensity axis then
+rescales to what is left, so two figures cropped differently are no longer
+comparable by height. Prefer the per-sample columns when one pattern alone
+needs cropping.
 
 **It draws what the export contains and cannot judge it.** The residual panel
 is copied from the refinement, not recomputed. A refinement converged on the
@@ -325,16 +340,21 @@ a fixed seed (`default_rng(0)`) and asserts:
 | A CSV with no 2θ column | Isolated as `2theta column not found` |
 | A CSV with only 2θ and `Obs` | Isolated as `residual column 'diff/sigma' not found` |
 | A CSV with 2θ, `Obs` and `diff/sigma` | `calc` and `bkg` filled with zeros, reported, still plotted |
+| A CSV whose `Obs` column is all text | Isolated as `no valid data in the obs column` |
 | A CSV with one over-long row | The row skipped and counted, every other row still bit-exact |
 | A complete export, phases named `Alpha` and `Beta` | Only the two phases detected among eleven columns, `tick-pos` and `Axis-limits` left alone |
+| A header repeated in the export | The `tick-pos.1` pandas invents is still blocklisted, not drawn as a phase |
+| A column too full to be a reflection list | Reported by name and left undrawn |
 | A synthetic metadata row | Name and both phase fractions arrive in the legend text |
-| A third phase | Legend in alphabetical order, one tick row each, the colour cycle handed out in that order |
+| A third phase, and two columns of one phase | Legend in alphabetical order, one tick row each, the cycle in that order, a repeated label taking one entry and one colour |
 | A `<phase>_color` cell, and one holding text that is not a colour | The colour follows its phase alone and beside another, the invalid cell is reported and falls back to the cycle |
-| Metadata with a decimal comma, an empty `formula` and an unmatched `_pct` column | 60,5 read as 60.5, the file name used as the legend name, the unmatched column reported |
-| Two metadata columns matching one phase | No percentage printed, and a warning naming both columns |
-| The window unset, then the constants, then `x_min`/`x_max` in the metadata | The measured range, then the constants, then the per-sample pair, each overriding the one before |
-| The same export with `WEIGHTED_RESIDUALS = False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated |
-| The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, the residual setting restored, an unreadable file raising |
+| A general and a specific `_color` key, and a column named only `_pct` | The longer key wins, the nameless column matches no phase |
+| `PHASE_LABELS` and `PHASE_COLORS` set together | The renamed phase prints its new name and keeps the colour keyed to it |
+| Metadata with a decimal comma, an empty `formula`, an unmatched `_pct` column, two columns matching one phase | 60,5 read as 60.5, the file name used as the legend name, both mismatches reported, no percentage guessed |
+| The window unset, then the constants, then `x_min`/`x_max` in the metadata | The measured range, then the constants, then the per-sample pair, each overriding the one before, with the intensity axis rescaled to the window |
+| The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
+| The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
+| A folder whose middle file is unusable | It is reported with its reason and the files after it are still drawn |
 
 The section raises `AssertionError` on the first failure, so executing the
 notebook is a test run:
