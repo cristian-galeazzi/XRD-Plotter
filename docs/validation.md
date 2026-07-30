@@ -42,6 +42,7 @@ version this is developed with.
 | Both variants | Both phase columns detected and trimmed independently |
 | The native export, 11 header names above 10 data fields | Refused, because the 2θ header sits above the counts, so the figure would look right and be wrong |
 | A 2θ axis running from 90° down to 10° | Still accepted: the guard rejects an axis that turns, not one that runs backwards |
+| Eleven angle-header spellings, and headers that must not match | Only the angle header is flexible; a renamed `obs` is drawn flat and a phase header holding a comma is never read as the axis |
 | An axis with one swapped pair, and one with repeated points | Both accepted: neither travels backwards far enough to be anything but an axis |
 | A column of alternating counts, two scans pasted into one file, a column of one repeated value | All three refused, since the distance travelled backwards is not a rounding detail |
 | A smooth monotone column running 400 to 40 | Refused, outside the 0 to 180 degrees a 2θ axis occupies |
@@ -53,6 +54,7 @@ version this is developed with.
 | A CSV with one over-long row | The row skipped and counted, every other row still bit-exact |
 | A complete export, phases named `Alpha` and `Beta` | Only the two phases detected among eleven columns, `tick-pos` and `Axis-limits` left alone |
 | A header repeated in the export | The `tick-pos.1` pandas invents is still blocklisted, not drawn as a phase |
+| `Rw`, `Rw%`, `Rw / %`, `Rwp / %`, `chi2`, `GOF` and `Tick-Pos`, beside `Rp` | The folded blocklist catches every spelling, `Rp` stays undrawn as a phase, and a name added to `NON_PHASE_COLUMNS` takes effect on the next call, not at import |
 | A column too full to be a reflection list | Reported by name and left undrawn |
 | A synthetic metadata row | Name and both phase fractions arrive in the legend text |
 | A third phase, and two columns of one phase | Legend in alphabetical order, one tick row each, the cycle in that order, a repeated label taking one entry and one colour |
@@ -61,9 +63,10 @@ version this is developed with.
 | `PHASE_LABELS` and `PHASE_COLORS` set together | The renamed phase prints its new name and keeps the colour keyed to it |
 | Metadata with a decimal comma, an empty `formula`, an unmatched `_pct` column, two columns matching one phase | 60,5 read as 60.5, the file name used as the legend name, both mismatches reported, no percentage guessed |
 | The window unset, then the constants, then `x_min`/`x_max` in the metadata | Each overrides the one before, with the intensity axis rescaled to the window |
+| A calc peak taller than the obs scatter it overshoots | The top margin follows the obs max and still clears the taller calc peak |
 | Both intensity labels and the 2θ label | `Intensity / a.u.`, `√Intensity / a.u.` and `2θ / °`, the IUPAC `quantity / unit` form with no parentheses |
 | The ticks of the finished figure | Neither y axis numbered nor marked, the 2θ numbers and marks drawn once, under the lower panel |
-| The residual panel of both modes | One line drawn on it, the trace, and the trace not clipped by the panel it is given |
+| The residual panel of both modes | One line drawn on it, the trace |
 | The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
 | The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
 | The section 4 save reusing the batch name and writer | `_sqrt`, `_linear` and the `_counts` suffix chosen from the toggles, both files written under that name |
