@@ -50,6 +50,7 @@ version this is developed with.
 | A CSV with no 2θ column | Isolated as `2theta column not found` |
 | A CSV with only 2θ and `Obs` | Isolated as `residual column 'diff/sigma' not found` |
 | A CSV whose `Obs` column is all text | Isolated as `no valid data in the obs column` |
+| A CSV whose `diff/sigma` column is all text | Isolated as `no valid data in the 'diff/sigma' column` |
 | A CSV with 2θ, `Obs` and `diff/sigma` | `calc` and `bkg` filled with zeros, still plotted |
 | A CSV with one over-long row | The row skipped and counted, every other row still bit-exact |
 | A complete export, phases named `Alpha` and `Beta` | Only the two phases detected among eleven columns, `tick-pos` and `Axis-limits` left alone |

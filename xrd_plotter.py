@@ -320,6 +320,8 @@ def read_gsas2_csv(csv_path, weighted=None):
         if resid_col is None:
             return None, None, f"residual column '{wanted}' not found"
         data["resid"] = clean(df[resid_col])
+        if np.all(np.isnan(data["resid"])):
+            return None, None, f"no valid data in the '{wanted}' column"
         n_nan = int(np.isnan(data["resid"]).sum())
         if n_nan:
             warnings.append(f"column '{wanted}': {n_nan} non-numeric values -> NaN")

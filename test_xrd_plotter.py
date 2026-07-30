@@ -65,6 +65,8 @@ def synth(tmp_path_factory):
     df[["2theta", "Obs", "diff/sigma"]].to_csv(tmp / "no_calc.csv", sep=";",
                                                index=False)
     df.assign(Obs="n/a").to_csv(tmp / "obs_all_text.csv", sep=";", index=False)
+    df.assign(**{"diff/sigma": "n/a"}).to_csv(tmp / "resid_all_text.csv",
+                                              sep=";", index=False)
 
     # One row two fields too long: the C parser cannot tokenise the file.
     lines = a.read_text().splitlines()
@@ -142,6 +144,7 @@ def test_parse_is_bit_exact(synth, variant):
     ("no_theta.csv", "2theta column not found"),
     ("only_obs.csv", "residual column 'diff/sigma' not found"),
     ("obs_all_text.csv", "no valid data in the obs column"),
+    ("resid_all_text.csv", "no valid data in the 'diff/sigma' column"),
 ])
 def test_degraded_files_are_isolated(synth, name, reason):
     data, _, error = xp.read_gsas2_csv(synth.tmp / name)
