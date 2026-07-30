@@ -93,16 +93,15 @@ another.
 The figure, from the top down: the observed pattern as black points, the
 refined pattern as a red line, the refined background as a grey dashed line,
 one row of coloured ticks per phase at its reflection positions, and a lower
-panel with the residuals against a zero line. The legend names the sample and
-the phase fractions.
+panel with the residuals. The legend names the sample and the phase fractions.
 
 Neither y axis carries numbers nor tick marks. Intensity in a diffractogram is
 an arbitrary unit, and an axis of tick labels invites the reader to compare
 heights across measurements where no comparison holds. The residual panel
-follows the same rule, so its zero line is the reference and the panel shows
-the shape of the misfit rather than its size. The 2θ axis keeps its numbers,
-drawn once under the lower panel. Axis labels read as `quantity / unit`, the
-IUPAC form, so no parentheses appear around `a.u.` or `°`.
+follows the same rule, and carries no line at zero either, so it shows the
+shape of the misfit rather than its size. The 2θ axis keeps its numbers, drawn
+once under the lower panel. Axis labels read as `quantity / unit`, the IUPAC
+form, so no parentheses appear around `a.u.` or `°`.
 
 ## Settings
 
