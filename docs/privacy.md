@@ -41,7 +41,9 @@ and your files never leave your machine.
 
 ## Phase names
 
-Colours and legend names for your phases belong in `Samples_metadata.csv`,
-through the `<phase>_color` columns, rather than in the notebook. That keeps
-the system you work on out of the published repository. See
-[the metadata reference](metadata.md).
+Phase colours belong in `Samples_metadata.csv`, through the `<phase>_color`
+columns, rather than in `PHASE_COLORS` in the notebook. The names printed in
+the legend come from the phase column headers of your own uncommitted CSV
+files, and the sample name from the `formula` column of the metadata file, so
+they stay out of the repository as well. Leave `PHASE_LABELS` empty for the
+same reason. See [the metadata reference](metadata.md).

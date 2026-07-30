@@ -115,11 +115,12 @@ column 'diff/sigma' not found`.
 ## How the phases are found
 
 **By elimination, not from a list of names.** The engine knows the headers
-GSAS-II writes itself, `used`, `diff`, `tick-pos`, `Axis-limits`, `excluded`
-and the pattern columns above, together with the fit statistics people keep
-beside the pattern, `GOF`, `Rw`, `Rwp`, `Rexp` and `chi2`. All of them are in
-`NON_PHASE_COLUMNS`, and `Rp` deliberately is not, since it also labels a
-phase. Any other column counts as a phase when it fills
+GSAS-II writes itself, `used`, `diff`, `tick-pos`, `tick pos`, `Axis-limits`,
+`axis limits`, `excluded` and the pattern columns above, the per-point
+uncertainties, `weight`, `weights`, `sig` and `sigma`, and the fit statistics
+people keep beside the pattern, `GOF`, `Rw`, `Rwp`, `Rexp` and `chi2`. All of
+them are in `NON_PHASE_COLUMNS`, and `Rp` deliberately is not, since it also
+labels a phase. Any other column counts as a phase when it fills
 at most half the rows, the share in `PHASE_MAX_FILL`. A column above that
 share is named on screen and left undrawn rather than dropped in silence, so
 a reflection list dense enough to cross the ceiling tells you why it is
@@ -129,7 +130,16 @@ is matched against the blocklist without its suffix.
 Blocklist entries are compared folded, ignoring case, spaces and the
 punctuation people add, so the single entry `rw` covers `Rw`, `Rw%` and
 `Rw / %`. A phase whose name merely begins the same way, `Rw phase`, is
-still drawn. To keep a column of your own out of the legend, add its header:
+still drawn.
+
+> [!WARNING]
+> Every blocklist entry is a name a phase itself could carry, `sigma` for the
+> intermetallic among them. A phase column headed exactly `sigma`, `weight`,
+> `GOF` or any other entry is read as a bookkeeping column and left undrawn.
+> Rename that header, `Sigma phase` is enough, since only an exact folded
+> match is blocked. The `phases:` line each run prints is where you catch it.
+
+To keep a column of your own out of the legend, add its header:
 
 ```python
 xp.NON_PHASE_COLUMNS = xp.NON_PHASE_COLUMNS | {"scan note"}

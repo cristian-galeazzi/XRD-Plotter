@@ -59,9 +59,11 @@ You end up with this. You add files to `data/` only:
 XRD_Rietveld_Plotter.ipynb   <- the four sections you run
 xrd_plotter.py               <- the engine, imported by the notebook
 test_xrd_plotter.py          <- the validation suite
+requirements.txt             <- the six packages, for the terminal route
 Samples_metadata.csv         <- optional, yours, never committed
 data/                        <- your CSV exports go here
-output/                      <- ships empty, the figures land here
+docs/                        <- the references linked from here
+output/                      <- ships empty, pdf/ and png/ appear on the first run
 ```
 
 The first cell installs numpy, pandas, matplotlib, ipywidgets, IPython and
