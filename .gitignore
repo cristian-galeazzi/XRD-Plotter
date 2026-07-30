@@ -8,6 +8,11 @@ Samples_metadata.csv
 # The nbconvert run in docs/validation.md writes this with outputs embedded
 executed.ipynb
 
+# Agent scratch: implementation plans and per-task briefs, notes about the
+# work rather than part of it
+.superpowers/
+docs/superpowers/
+
 # Editor and Jupyter / Python artifacts
 .vscode/
 .ipynb_checkpoints/
