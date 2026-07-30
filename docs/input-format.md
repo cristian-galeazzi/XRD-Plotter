@@ -73,21 +73,28 @@ The notebook reads what it needs and ignores the rest.
 | Residuals | be `diff/sigma`, or `diff` with `WEIGHTED_RESIDUALS = False` | Yes | Drawn in the lower panel |
 | Reflection positions, one column per phase | carry the phase name from your project | No | 2θ positions for that phase's tick row |
 
-Matching ignores case and tolerates extra text, so `obs` and `Obs` name the
-same column, and both `Phase 1` and `Phase 1 hkl` are recognised.
+Case never matters and surrounding spaces are trimmed, so `Obs`, `obs` and
+` OBS ` are one column. Beyond that the angle is the tolerant one and the
+rest are exact:
 
-**Keep the names of the pattern columns.** They are found by their names, so
-`obs`, `calc` or `bkg` renamed is filled with zeros and drawn flat, and a
-renamed `diff/sigma` stops the file. The 2θ header is the tolerant one:
-`2theta`, `2 theta`, `2θ`, `two-theta`, `2theta_deg`, `x` and
-`x, 2theta (deg)` all work, in any case, so an export from another program
-needs no editing there.
+| Header | Also accepted | Not accepted |
+|---|---|---|
+| the angle | `2theta`, `2 theta`, `2-theta`, `two-theta`, `2θ`, `2theta_deg`, `x`, `x, deg`, `x, 2theta (deg)` | `theta`, `angle` |
+| `obs` | nothing else | `observed`, `y_obs`, `Iobs` |
+| `calc` | nothing else | `calculated`, `y_calc` |
+| `bkg` | nothing else | `background` |
+| `diff/sigma`, `diff` | nothing else | `diff / sigma`, `difference` |
+
+**So keep the names of the pattern columns.** A renamed `obs`, `calc` or
+`bkg` is filled with zeros and drawn flat, reported on screen but drawn all
+the same, and a renamed residual column stops the file. Only the angle header
+is free, which is what lets an export from another program run unedited.
 
 **Rename the phase columns.** A phase column arrives with whatever GSAS-II
 had for it, the name you gave the phase in the project or the file it came
 from. Put the real phase there and it goes straight into the legend, with no
 setting to change: `Phase 1` becomes `Anatase` by editing that header
-alone.
+alone. A trailing `hkl` is dropped, so `Anatase hkl` prints the same.
 
 Two columns are required, the 2θ and the residuals. A missing `obs`, `calc`
 or `bkg` is filled with zeros and reported on screen, so a partial file still

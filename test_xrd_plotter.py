@@ -193,6 +193,22 @@ def test_theta_header_spellings_refused(header):
     assert not xp.is_theta_header(header), header
 
 
+def test_pattern_columns_match_on_the_exact_name(tmp_path):
+    # Case and surrounding spaces are ignored, nothing else is: the docs say
+    # so, and a renamed column is drawn flat rather than guessed at.
+    x = np.linspace(10.0, 90.0, 300)
+    obs = np.linspace(100.0, 200.0, 300)
+    for header, found in ((" OBS ", True), ("Obs", True),
+                          ("observed", False), ("y_obs", False)):
+        csv = tmp_path / f"{header.strip()}.csv"
+        pd.DataFrame({"x, 2theta (deg)": x, header: obs,
+                      "diff/sigma": np.zeros(300)}).to_csv(csv, sep=";",
+                                                           index=False)
+        data, _, error = xp.read_gsas2_csv(csv)
+        assert error is None, error
+        assert np.any(data["obs"] != 0) == found, header
+
+
 def test_a_phase_name_containing_x_comma_is_not_taken_as_the_axis(tmp_path):
     # 'x,' sits inside ordinary words, so 'Max, phase' matches the same rule
     # as 'x, 2theta (deg)'. The short column must not become the axis.
