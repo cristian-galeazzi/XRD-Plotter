@@ -24,7 +24,7 @@ abstract: >-
   Python module, so the notebook, the test suite and any script share one
   implementation.
 repository-code: "https://github.com/cristian-galeazzi/XRD-Plotter"
-version: 1.0.1
+version: 1.0.0
 date-released: 2026-07-30
 license: MIT
 keywords:
