@@ -11,12 +11,14 @@ on a copy, so the functions see the change:
     xp.PLOT_X_MIN, xp.PLOT_X_MAX = 13, 85
 """
 import io
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import is_color_like
+from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 # --- Plot appearance --------------------------------------------------
@@ -98,20 +100,21 @@ PHASE_COLOR_CYCLE = ("#EE8031", "#1f77b4", "#FF1493", "#2CA02C", "#9467BD",
                      "#8C564B")
 
 
-def fmt_pct(p):
+def fmt_pct(p: float) -> str:
     """Phase fraction label: one decimal, trailing '.0' dropped (62.0 -> 62)."""
     s = f"{p:.1f}"
     return s[:-2] if s.endswith(".0") else s
 
 
-def residual_column(weighted=None):
+def residual_column(weighted: bool | None = None) -> str:
     """Header the lower panel is drawn from, per WEIGHTED_RESIDUALS."""
     if weighted is None:
         weighted = WEIGHTED_RESIDUALS
     return "diff/sigma" if weighted else "diff"
 
 
-def residual_limits(resid, weighted=None):
+def residual_limits(resid: np.ndarray,
+                    weighted: bool | None = None) -> tuple[float, float]:
     """Symmetric limits for the lower panel, so zero sits at its middle.
 
     The half height is the largest residual drawn, with a margin above it. In
@@ -137,7 +140,7 @@ def residual_limits(resid, weighted=None):
     return (-half, half) if half > 0.0 else (-RESIDUAL_SPAN, RESIDUAL_SPAN)
 
 
-def fold(header):
+def fold(header: str) -> str:
     """Header reduced to the characters that carry its meaning.
 
     Case, the Greek theta and the punctuation exporters vary are dropped, so
@@ -151,7 +154,7 @@ def fold(header):
     return text
 
 
-def is_theta_header(header):
+def is_theta_header(header: str) -> bool:
     """True when a column header names the diffraction angle.
 
     Matched on the folded header, so '2theta', '2 theta', 'two-theta' and
@@ -163,7 +166,7 @@ def is_theta_header(header):
             or header.lower().split(",")[0].strip() == "x")
 
 
-def is_monotonic(values, tolerance=0.01):
+def is_monotonic(values: np.ndarray, tolerance: float = 0.01) -> bool:
     """True when the finite values run one way from end to end.
 
     A 2theta axis climbs, or on some instruments descends, from the first row
@@ -187,7 +190,8 @@ def is_monotonic(values, tolerance=0.01):
     return min(rise, fall) <= tolerance * (rise + fall)
 
 
-def plot_window(theta, x_min=None, x_max=None):
+def plot_window(theta: np.ndarray, x_min: float | None = None,
+                x_max: float | None = None) -> tuple[float, float]:
     """2theta limits: the per-sample pair, then the constants, then the data."""
     low = x_min if x_min is not None else PLOT_X_MIN
     high = x_max if x_max is not None else PLOT_X_MAX
@@ -195,7 +199,7 @@ def plot_window(theta, x_min=None, x_max=None):
             float(np.nanmax(theta)) if high is None else float(high))
 
 
-def phase_label(column):
+def phase_label(column: str) -> str:
     """Legend name for a phase column: 'Phase 1 hkl' -> 'Phase 1'."""
     label = column.strip()
     if label.lower().endswith("hkl"):
@@ -204,7 +208,7 @@ def phase_label(column):
     return override if override else label[:1].upper() + label[1:]
 
 
-def longest_match(mapping, label):
+def longest_match(mapping: dict[str, str] | None, label: str) -> str | None:
     """Value whose key is the longest fragment of label, or None.
 
     The longest key wins so that a specific column ('phase 1_color') beats a
@@ -214,7 +218,8 @@ def longest_match(mapping, label):
     return mapping[max(keys, key=len)] if keys else None
 
 
-def phase_colors(ordered_labels, overrides=None):
+def phase_colors(ordered_labels: list[str],
+                 overrides: dict[str, str] | None = None) -> dict[str, str]:
     """Tick colour per phase: the metadata, then PHASE_COLORS, then the cycle.
 
     Both mappings are keyed by a fragment of the legend name. Repeated
@@ -232,7 +237,7 @@ def phase_colors(ordered_labels, overrides=None):
     return colors
 
 
-def phase_fraction(pct, label):
+def phase_fraction(pct: dict[str, float], label: str) -> float:
     """Percentage for one phase, matched on the metadata key as a fragment."""
     hits = sorted(k for k in pct if k in label.lower())
     if len(hits) > 1:
@@ -243,7 +248,9 @@ def phase_fraction(pct, label):
 
 
 # --- Parsing -----------------------------------------------------------
-def read_gsas2_csv(csv_path, weighted=None):
+def read_gsas2_csv(csv_path: str | Path, weighted: bool | None = None
+                   ) -> tuple[dict[str, np.ndarray] | None,
+                              list[str] | None, str | None]:
     """Read one CSV saved from a GSAS-II Rietveld plot.
 
     Returns (data, phase_cols, error): on success error is None, on failure
@@ -393,7 +400,7 @@ def read_gsas2_csv(csv_path, weighted=None):
         return None, None, f"read error: {e}"
 
 
-def load_metadata(metadata_path):
+def load_metadata(metadata_path: str | Path) -> pd.DataFrame:
     """Read the (private) sample metadata CSV, indexed by filename.
 
     Expected columns: 'filename' (or 'file'), optional 'formula', one
@@ -422,7 +429,7 @@ def load_metadata(metadata_path):
     return df
 
 
-def to_number(value):
+def to_number(value: object) -> float | None:
     """One metadata cell as a float, or None when it is blank or not a number."""
     try:
         number = float(str(value).replace(",", "."))  # decimal comma
@@ -431,7 +438,7 @@ def to_number(value):
     return None if np.isnan(number) else number
 
 
-def to_color(value):
+def to_color(value: object) -> str | None:
     """One metadata cell as a colour, or None when blank or not a colour."""
     text = str(value).strip()
     if not text or text.lower() == "nan":
@@ -442,7 +449,7 @@ def to_color(value):
     return text
 
 
-def metadata_keys(columns, suffix):
+def metadata_keys(columns: Iterable[str], suffix: str) -> dict[str, str]:
     """Column names ending in suffix, keyed by the phase fragment before it.
 
     A column named exactly like the suffix carries no phase name and is
@@ -452,7 +459,9 @@ def metadata_keys(columns, suffix):
             if c.endswith(suffix) and len(c) > len(suffix)}
 
 
-def sample_info(meta_df, filename, default_name):
+def sample_info(meta_df: pd.DataFrame, filename: str, default_name: str
+                ) -> tuple[str, dict[str, float], dict[str, str],
+                           tuple[float | None, float | None]]:
     """Name, fractions, colours and 2theta window for one file (empty-safe).
 
     Every '<phase>_pct' and '<phase>_color' column becomes one entry, keyed
@@ -483,7 +492,10 @@ def sample_info(meta_df, filename, default_name):
 
 
 # --- Data preparation ---------------------------------------------------
-def prepare_data(data, phase_cols, use_sqrt=True):
+def prepare_data(data: dict[str, np.ndarray], phase_cols: list[str],
+                 use_sqrt: bool = True
+                 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray,
+                            np.ndarray, dict[str, np.ndarray]]:
     """Mask invalid points; optionally apply the display-only sqrt transform."""
     mask = ~(np.isnan(data["x"]) | np.isnan(data["obs"]))
     if not mask.any():
@@ -506,9 +518,14 @@ def prepare_data(data, phase_cols, use_sqrt=True):
 
 
 # --- Plotting -------------------------------------------------------------
-def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
-                use_sqrt=True, xlim=(None, None), ylim=(None, None),
-                colors=None, weighted=None):
+def create_plot(theta: np.ndarray, obs: np.ndarray, calc: np.ndarray,
+                bkg: np.ndarray, resid: np.ndarray,
+                phases: dict[str, np.ndarray], name: str,
+                pct: dict[str, float], use_sqrt: bool = True,
+                xlim: tuple[float | None, float | None] = (None, None),
+                ylim: tuple[float | None, float | None] = (None, None),
+                colors: dict[str, str] | None = None,
+                weighted: bool | None = None) -> Figure:
     """Two-panel Rietveld plot; returns the matplotlib Figure."""
     fig, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(FIGURE_WIDTH, FIGURE_HEIGHT), dpi=110,
@@ -623,7 +640,8 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
     return fig
 
 
-def report_colors(phase_cols, colors):
+def report_colors(phase_cols: list[str],
+                  colors: dict[str, str] | None) -> None:
     """Print each detected phase with the colour it was drawn in."""
     labels = list(dict.fromkeys(sorted(phase_label(c) for c in phase_cols)))
     if not labels:
@@ -633,8 +651,11 @@ def report_colors(phase_cols, colors):
     print("  phases: " + ", ".join(f"{lbl} {drawn[lbl]}" for lbl in labels))
 
 
-def replot_file(csv_path, metadata_file, x_min=None, x_max=None,
-                y_min=None, y_max=None, use_sqrt=True, weighted=True):
+def replot_file(csv_path: str | Path, metadata_file: str | Path,
+                x_min: float | None = None, x_max: float | None = None,
+                y_min: float | None = None, y_max: float | None = None,
+                use_sqrt: bool = True,
+                weighted: bool | None = True) -> tuple[Figure, str]:
     """Draw one file with the given window and toggles, without saving it.
 
     Returns (figure, metadata_line): the line is the row to paste into the
@@ -659,7 +680,8 @@ def replot_file(csv_path, metadata_file, x_min=None, x_max=None,
 
 
 # --- Batch driver ---------------------------------------------------------
-def output_basename(stem, use_sqrt=True, weighted=None):
+def output_basename(stem: str, use_sqrt: bool = True,
+                    weighted: bool | None = None) -> str:
     """Output file name for a sample stem, identical to the batch run.
 
     weighted defaults to the WEIGHTED_RESIDUALS setting; pass it explicitly
@@ -671,7 +693,7 @@ def output_basename(stem, use_sqrt=True, weighted=None):
             f"{'' if weighted else '_unweighted'}")
 
 
-def save_figure(fig, output_folder, base):
+def save_figure(fig: Figure, output_folder: str | Path, base: str) -> str:
     """Write base.pdf and base.png into output_folder/pdf and .../png.
 
     Sorting by extension keeps a large output folder tidy. Returns the base
@@ -687,7 +709,8 @@ def save_figure(fig, output_folder, base):
     return base
 
 
-def sample_window(metadata_file, filename):
+def sample_window(metadata_file: str | Path, filename: str
+                  ) -> tuple[float | None, float | None]:
     """The (x_min, x_max) a sample's metadata row sets, each None if unset.
 
     Section 4 prefills its 2theta boxes with this, so a file opens on the
@@ -698,7 +721,7 @@ def sample_window(metadata_file, filename):
     return window
 
 
-def show_inline(fig):
+def show_inline(fig: Figure) -> None:
     """Render fig under the running cell at PREVIEW_WIDTH_PX; no-op off-kernel.
 
     A saved PNG shown at an explicit width renders the same in classic
@@ -719,8 +742,11 @@ def show_inline(fig):
     display(Image(data=buf.getvalue(), width=PREVIEW_WIDTH_PX))
 
 
-def process_folder(data_folder, metadata_file, output_folder,
-                   use_sqrt=True, show=True):
+def process_folder(data_folder: str | Path,
+                   metadata_file: str | Path,
+                   output_folder: str | Path,
+                   use_sqrt: bool = True, show: bool = True
+                   ) -> list[tuple[str, str, str]]:
     """Plot every GSAS-II CSV export in data_folder; save PDF + PNG."""
     data_dir = Path(data_folder)
     data_dir.mkdir(exist_ok=True)  # first run: created empty, ready for your files
