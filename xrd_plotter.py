@@ -320,6 +320,8 @@ def read_gsas2_csv(csv_path, weighted=None):
         if resid_col is None:
             return None, None, f"residual column '{wanted}' not found"
         data["resid"] = clean(df[resid_col])
+        if np.all(np.isnan(data["resid"])):
+            return None, None, f"no valid data in the '{wanted}' column"
         n_nan = int(np.isnan(data["resid"]).sum())
         if n_nan:
             warnings.append(f"column '{wanted}': {n_nan} non-numeric values -> NaN")
@@ -565,13 +567,16 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
               + ", ".join(o + "_pct" for o in orphans))
 
     ax2.plot(theta, resid, color=COLOR_RESIDUALS, lw=LINEWIDTH_RESIDUALS)
-    ax2.axhline(0, color="black", lw=1.5)
     ax2.set_xlabel(r"2$\theta$ / $^\circ$", fontsize=FONT_SIZE_LABEL)
     ax2.set_ylabel(r"diff/$\sigma$" if residual_column(weighted) == "diff/sigma"
                    else r"diff / a.u.", fontsize=FONT_SIZE_LABEL)
     ax2.set_xlim(x_low, x_high)
-    # The residual axis loses its numbers too, so the zero line is the only
-    # reference left: the panel shows the shape of the misfit, not its size.
+    # The residual axis loses its numbers too, and no line is drawn at zero:
+    # the panel shows the shape of the misfit, not its size. Symmetric limits
+    # would put zero at the middle, but they would also lift the trace out of
+    # the space it now keeps below the tick rows, and the raw diff is
+    # asymmetric enough for that to be a visible move. The limits stay on
+    # autoscale, so the trace fills the panel it is given.
     ax2.tick_params(direction="in", right=False, left=False, labelleft=False,
                     bottom=True, width=1.5, length=6,
                     labelsize=FONT_SIZE_TICK)

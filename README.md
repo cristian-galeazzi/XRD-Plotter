@@ -61,14 +61,15 @@ xrd_plotter.py               <- the engine, imported by the notebook
 test_xrd_plotter.py          <- the validation suite
 Samples_metadata.csv         <- optional, yours, never committed
 data/                        <- your CSV exports go here
-output/                      <- created on the first run, the figures land here
+output/                      <- ships empty, the figures land here
 ```
 
 The first cell installs numpy, pandas, matplotlib, ipywidgets, IPython and
 pytest when they are missing, so you install nothing by hand. From a
-terminal, `pip install -r requirements.txt` does the same in one step. Tested
-on Python 3.13 and 3.14 with numpy 2.5, pandas 3.0, matplotlib 3.11,
-ipywidgets 8.1, IPython 9.15 and pytest 9.1.
+terminal, `pip install -r requirements.txt` does the same in one step. CI runs
+the suite and the notebook on Python 3.10 and 3.13. Development is on Python
+3.13 with numpy 2.4, pandas 3.0, matplotlib 3.10, ipywidgets 8.1, IPython 9.15
+and pytest 9.0.
 
 > [!TIP]
 > In VS Code, *Select Kernel* at the top right chooses which Python runs the
@@ -93,16 +94,15 @@ another.
 The figure, from the top down: the observed pattern as black points, the
 refined pattern as a red line, the refined background as a grey dashed line,
 one row of coloured ticks per phase at its reflection positions, and a lower
-panel with the residuals against a zero line. The legend names the sample and
-the phase fractions.
+panel with the residuals. The legend names the sample and the phase fractions.
 
 Neither y axis carries numbers nor tick marks. Intensity in a diffractogram is
 an arbitrary unit, and an axis of tick labels invites the reader to compare
 heights across measurements where no comparison holds. The residual panel
-follows the same rule, so its zero line is the reference and the panel shows
-the shape of the misfit rather than its size. The 2θ axis keeps its numbers,
-drawn once under the lower panel. Axis labels read as `quantity / unit`, the
-IUPAC form, so no parentheses appear around `a.u.` or `°`.
+follows the same rule, and carries no line at zero either, so it shows the
+shape of the misfit rather than its size. The 2θ axis keeps its numbers, drawn
+once under the lower panel. Axis labels read as `quantity / unit`, the IUPAC
+form, so no parentheses appear around `a.u.` or `°`.
 
 ## Settings
 

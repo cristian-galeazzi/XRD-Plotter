@@ -65,6 +65,8 @@ def synth(tmp_path_factory):
     df[["2theta", "Obs", "diff/sigma"]].to_csv(tmp / "no_calc.csv", sep=";",
                                                index=False)
     df.assign(Obs="n/a").to_csv(tmp / "obs_all_text.csv", sep=";", index=False)
+    df.assign(**{"diff/sigma": "n/a"}).to_csv(tmp / "resid_all_text.csv",
+                                              sep=";", index=False)
 
     # One row two fields too long: the C parser cannot tokenise the file.
     lines = a.read_text().splitlines()
@@ -142,6 +144,7 @@ def test_parse_is_bit_exact(synth, variant):
     ("no_theta.csv", "2theta column not found"),
     ("only_obs.csv", "residual column 'diff/sigma' not found"),
     ("obs_all_text.csv", "no valid data in the obs column"),
+    ("resid_all_text.csv", "no valid data in the 'diff/sigma' column"),
 ])
 def test_degraded_files_are_isolated(synth, name, reason):
     data, _, error = xp.read_gsas2_csv(synth.tmp / name)
@@ -466,6 +469,27 @@ def test_unweighted_residuals(synth, drawn):
     _, _, error = xp.read_gsas2_csv(synth.a, weighted=False)
     assert error == "residual column 'diff' not found", error
     assert xp.WEIGHTED_RESIDUALS is True, "the constant must not be mutated"
+
+
+@pytest.mark.parametrize("weighted", [True, False])
+def test_residual_panel_carries_the_trace_alone(synth, drawn, weighted):
+    """Nothing is drawn on the panel besides the residual, and it is not clipped.
+
+    The panel carries no numbers, so a line at zero used to be the only
+    reference on it, and in the raw diff mode that line sat above the middle:
+    the residual is asymmetric, its negative misfit spikes deeper than the
+    positive ones. The line goes rather than the placement, because the
+    autoscaled trace is what sits clear of the tick rows above.
+    """
+    data, phase_cols, error = xp.read_gsas2_csv(synth.full, weighted=weighted)
+    assert error is None, error
+    fig = xp.create_plot(*xp.prepare_data(data, phase_cols), drawn.name,
+                         drawn.pct, weighted=weighted)
+    lower = fig.axes[1]
+    assert len(lower.lines) == 1, "the residual panel drew more than the trace"
+    low, high = lower.get_ylim()
+    assert low <= np.nanmin(data["resid"]) and high >= np.nanmax(data["resid"]), (
+        f"the trace is clipped: panel {low} to {high}")
 
 
 # 12. The function behind the interactive panel.
