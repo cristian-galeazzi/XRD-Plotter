@@ -12,7 +12,7 @@ press run. One run processes the whole folder.
 
 | `USE_SQRT = True`, `WEIGHTED_RESIDUALS = True` | `USE_SQRT = False`, `WEIGHTED_RESIDUALS = False` |
 |---|---|
-| ![Two-panel Rietveld figure on a square-root intensity axis: black observed points, red calculated fit, grey dashed background, one row of coloured reflection ticks per phase, and a lower panel of weighted residuals.](docs/example_sqrt.png) | ![The same pattern on a linear intensity axis, with the raw difference in the lower panel, where the strongest reflection dominates both panels.](docs/example_counts.png) |
+| ![Two-panel Rietveld figure on a square-root intensity axis: black observed points, red calculated fit, grey dashed background, one row of coloured reflection ticks per phase, and a lower panel of weighted residuals.](docs/example_sqrt.png) | ![The same pattern on a linear intensity axis, with the raw difference in the lower panel, where the strongest reflection dominates both panels.](docs/example_linear.png) |
 
 Same pattern, the two settings that change what you see. The square root
 keeps the weak reflections visible and `diff/sigma` holds the residuals in a
@@ -87,7 +87,7 @@ under `output/`:
 | `output/pdf/<name>_XRD_analysis_sqrt.pdf` | Vector, for the manuscript and for editing in Illustrator or Inkscape |
 | `output/png/<name>_XRD_analysis_sqrt.png` | 600 dpi raster, for slides and for a quick look |
 
-The suffix becomes `_linear` with `USE_SQRT = False`, and gains `_counts`
+The suffix becomes `_linear` with `USE_SQRT = False`, and gains `_unweighted`
 with `WEIGHTED_RESIDUALS = False`, so the variants never overwrite one
 another.
 
@@ -123,7 +123,7 @@ xp.PHASE_COLORS = {"phase 1": "#1f77b4"}  # pin a colour to a phase name
 | Setting | Default | Effect |
 |---|---|---|
 | `PLOT_X_MIN`, `PLOT_X_MAX` | `None` | The 2θ window. `None` draws the measured range of each file. `x_min` and `x_max` in the metadata win over these, per sample |
-| `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `diff` in counts when `False`. The axis label follows |
+| `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `diff` when `False`. The axis label follows |
 | `RESIDUAL_SPAN` | `5.0` | Narrowest the weighted residual panel is drawn, in standard deviations. Raise it to flatten the trace, lower it to magnify. A larger residual widens the panel instead of being clipped, and the raw `diff` gets no floor |
 | `USE_SQRT` | `True` | Set in section 3 of the notebook, not on the module. √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
 | `PHASE_COLORS`, `PHASE_LABELS` | empty | Colour and legend name per phase. The metadata file does the same, privately |
@@ -144,7 +144,7 @@ The CSV that the GSAS-II publication-plot dialog saves, not the one from
 > [!WARNING]
 > That export needs one edit before its first run. GSAS-II writes one header
 > name more than it writes data fields, so every name sits one column left of
-> its own data: the angles arrive under `used` and the counts arrive under
+> its own data: the angles arrive under `used` and the intensities arrive under
 > `x, 2theta (deg)`. Open the file in a spreadsheet, delete the `used` cell
 > of the header row and shift that row one place left. The notebook refuses a
 > file still shifted rather than drawing it, since the figure would look

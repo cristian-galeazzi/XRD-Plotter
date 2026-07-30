@@ -155,7 +155,7 @@ def test_degraded_files_are_isolated(synth, name, reason):
 def test_shifted_export_is_refused(tmp_path):
     # GSAS-II writes 11 header names and 10 fields per row, so every column
     # is read under its left neighbour's name: 'used' takes the angles and
-    # the 2theta header takes the counts. The figure would still draw.
+    # the 2theta header takes the intensities. The figure would still draw.
     x = np.linspace(10.0, 90.0, N)
     obs = 1000.0 * np.exp(-((x - 30.0) ** 2) / 2.0) + 50.0
     head = ("used;x, 2theta (deg);obs;calc;bkg;diff;Alpha;Beta;tick-pos;"
@@ -180,7 +180,7 @@ def test_an_axis_outside_0_to_180_degrees_is_refused(tmp_path):
                   "diff/sigma": np.zeros(300)}).to_csv(tmp_path / "wide.csv",
                                                        sep=";", index=False)
     data, _, error = xp.read_gsas2_csv(tmp_path / "wide.csv")
-    assert data is None, "a column of counts was drawn as an axis"
+    assert data is None, "a column of intensities was drawn as an axis"
     assert "0 to 180 degrees" in error, error
 
 
@@ -202,7 +202,7 @@ def test_header_matching(tmp_path):
                    "x, deg", "angle, 2theta", "2theta_deg", "2θ",
                    "2 theta (deg)", "two-theta", "x"):
         assert xp.is_theta_header(header), header
-    for header in ("theta", "angle", "obs", "counts", "Max, phase",
+    for header in ("theta", "angle", "obs", "intensity", "Max, phase",
                    "tick-pos"):
         assert not xp.is_theta_header(header), header
 
@@ -238,7 +238,7 @@ def test_is_monotonic():
     rising[100], rising[101] = rising[101], rising[100]  # one swapped pair
     assert xp.is_monotonic(rising), "one glitch must not reject a real axis"
 
-    assert not xp.is_monotonic(np.tile([1.0, 2.0], 250)), "counts accepted"
+    assert not xp.is_monotonic(np.tile([1.0, 2.0], 250)), "intensities accepted"
     scan = np.linspace(10.0, 90.0, 500)
     assert not xp.is_monotonic(np.concatenate([scan, scan])), (
         "two scans pasted into one file accepted")
@@ -496,7 +496,7 @@ def test_the_weighted_panel_keeps_one_scale_across_samples(synth, drawn):
     Autoscale put the trace at a different height in every sample, since the
     misfit is not symmetric, and no two figures could be read side by side.
     diff/sigma is in standard deviations of the point, so a floor in those
-    units is the same scale everywhere; the raw diff is in counts and has no
+    units is the same scale everywhere. The raw diff is in intensities and has no
     such unit, so it is centred and nothing more.
     """
     data, phase_cols, error = xp.read_gsas2_csv(synth.full)
@@ -541,9 +541,9 @@ def test_replot_file(synth):
 def test_output_basename_matches_the_batch():
     assert xp.output_basename("s", use_sqrt=True) == "s_XRD_analysis_sqrt"
     assert xp.output_basename("s", use_sqrt=False) == "s_XRD_analysis_linear"
-    # weighted=False adds _counts, so a save with the other residual mode
+    # weighted=False adds _unweighted, so a save with the other residual mode
     # does not overwrite the weighted file under the same name.
-    assert xp.output_basename("s", weighted=False) == "s_XRD_analysis_sqrt_counts"
+    assert xp.output_basename("s", weighted=False) == "s_XRD_analysis_sqrt_unweighted"
     # weighted left None follows the constant, which the suite keeps at True.
     assert xp.output_basename("s") == "s_XRD_analysis_sqrt"
 
@@ -584,7 +584,7 @@ def test_the_batch_isolates_a_bad_file_and_reports_every_block(synth, tmp_path,
     synth.df.to_csv(folder / "a_good.csv", sep=";", index=False)
     synth.df.assign(Obs="n/a").to_csv(folder / "b_broken.csv", sep=";",
                                       index=False)
-    # A shifted export: the angles land under 'used', the counts under the
+    # A shifted export: the angles land under 'used', the intensities under the
     # 2theta header. It must be isolated, not drawn.
     rows = [f"{10 + 0.2 * i:.4f};{100 + 50 * (i % 2)};1;1;1" for i in range(300)]
     (folder / "c_shifted.csv").write_text(

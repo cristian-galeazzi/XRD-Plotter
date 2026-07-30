@@ -34,8 +34,8 @@ PREVIEW_WIDTH_PX = 640                 # on-screen width of the section-3 inline
 
 # Lower panel: True draws diff/sigma, the residual divided by the standard
 # deviation of the point, so a well-fitted pattern stays inside a band of a
-# few units. False draws the raw diff in counts, where the tall reflections
-# dominate. Files carry the suffix '_counts' when this is False.
+# few units. False draws the raw diff, where the tall reflections dominate.
+# Files carry the suffix '_unweighted' when this is False.
 WEIGHTED_RESIDUALS = True
 # Smallest half height of the weighted residual panel, in units of sigma. The
 # panel is never narrower than this, so every well-fitted pattern is drawn on
@@ -119,8 +119,8 @@ def residual_limits(resid, weighted=None):
     diff/sigma is measured in standard deviations of the point and so means
     the same thing in every sample: a floor puts every well-fitted pattern on
     one scale, and only a fit that genuinely misses widens the panel. The raw
-    diff is in counts, which are comparable across nothing, so it gets no
-    floor and only the centring.
+    diff is in the intensities of one measurement, comparable across nothing,
+    so it gets no floor and only the centring.
 
     >>> residual_limits(np.array([-1.0, 2.0]), weighted=True)
     (-5.0, 5.0)
@@ -668,7 +668,7 @@ def output_basename(stem, use_sqrt=True, weighted=None):
     """
     weighted = WEIGHTED_RESIDUALS if weighted is None else weighted
     return (f"{stem}_XRD_analysis{'_sqrt' if use_sqrt else '_linear'}"
-            f"{'' if weighted else '_counts'}")
+            f"{'' if weighted else '_unweighted'}")
 
 
 def save_figure(fig, output_folder, base):

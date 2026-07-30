@@ -43,7 +43,7 @@ def main():
     out = Path(__file__).resolve().parent
 
     for name, use_sqrt, weighted in (("example_sqrt", True, True),
-                                     ("example_counts", False, False)):
+                                     ("example_linear", False, False)):
         resid = ((obs - calc) / np.sqrt(calc)) if weighted else (obs - calc)
         data = {"x": x, "obs": obs, "calc": calc, "bkg": bkg, "resid": resid,
                 **phases}

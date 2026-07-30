@@ -40,11 +40,11 @@ version this is developed with.
 | Semicolon separator, decimal commas | Bit-exact parsing of a locale export, asserted with `array_equal`, at zero tolerance |
 | Comma separator, decimal points, `x, deg` header | The same doubles from the other header and locale variant |
 | Both variants | Both phase columns detected and trimmed independently |
-| The native export, 11 header names above 10 data fields | Refused, because the 2θ header sits above the counts, so the figure would look right and be wrong |
+| The native export, 11 header names above 10 data fields | Refused, because the 2θ header sits above the intensities, so the figure would look right and be wrong |
 | A 2θ axis running from 90° down to 10° | Still accepted: the guard rejects an axis that turns, not one that runs backwards |
 | Eleven angle-header spellings, and headers that must not match | Only the angle header is flexible; a renamed `obs` is drawn flat and a phase header holding a comma is never read as the axis |
 | An axis with one swapped pair, and one with repeated points | Both accepted: neither travels backwards far enough to be anything but an axis |
-| A column of alternating counts, two scans pasted into one file, a column of one repeated value | All three refused, since the distance travelled backwards is not a rounding detail |
+| A column of alternating intensities, two scans pasted into one file, a column of one repeated value | All three refused, since the distance travelled backwards is not a rounding detail |
 | A smooth monotone column running 400 to 40 | Refused, outside the 0 to 180 degrees a 2θ axis occupies |
 | A file of arbitrary bytes | Isolated with a reason instead of raising |
 | A CSV with no 2θ column | Isolated as `2theta column not found` |
@@ -71,7 +71,7 @@ version this is developed with.
 | A well-fitted pattern, one with a residual past the floor, and a raw `diff` | Limits symmetric about zero in all three, held at `RESIDUAL_SPAN` for the first, widened rather than clipped for the second, unfloored for the third |
 | The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
 | The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
-| The section 4 save reusing the batch name and writer | `_sqrt`, `_linear` and the `_counts` suffix chosen from the toggles, both files written under that name |
+| The section 4 save reusing the batch name and writer | `_sqrt`, `_linear` and the `_unweighted` suffix chosen from the toggles, both files written under that name |
 | The window line the batch prints | The drawn 2theta range, marked `metadata` when a row set it and `auto` otherwise |
 | The window section 4 prefills from a metadata row | The `x_min`/`x_max` pair read back, blank cells and an absent file giving the widen-to-full sentinel |
 | A folder whose middle file is unusable | It is reported with its reason and the files after it are still drawn |

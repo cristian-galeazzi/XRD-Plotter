@@ -21,7 +21,7 @@
 > [!WARNING]
 > The usable export writes one header name more than it writes data fields,
 > so every name sits one column to the left of the data it describes. The
-> angles arrive under `used` and the counts arrive under `x, 2theta (deg)`.
+> angles arrive under `used` and the intensities arrive under `x, 2theta (deg)`.
 > A file left this way draws a figure that looks convincing and is wrong.
 
 The header it writes:
@@ -35,7 +35,7 @@ shift the rest of that row one place left.
 
 **Then read one data row across and check every name against the values under
 it.** The angle column climbs through your scan range, `obs` and `calc` hold
-counts of the same size, `bkg` is the small smooth one, and a phase column is
+intensities of the same size, `bkg` is the small smooth one, and a phase column is
 nearly empty. This takes a moment and catches an export that shifted a
 different way from the one described here. Save as CSV.
 
@@ -51,7 +51,7 @@ to the other, so it holds something other than angles and the header names
 do not line up with the columns they sit above. See docs/input-format.md
 ```
 
-Two properties a 2θ axis always has and a column of counts never has are
+Two properties a 2θ axis always has and a column of intensities never has are
 checked. It runs one way from the first row to the last, measured by distance
 travelled, so a handful of repeated or out-of-order points is tolerated while
 a column that doubles back is not. And it lies inside 0 to 180 degrees, which
