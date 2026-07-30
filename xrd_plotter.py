@@ -96,6 +96,23 @@ def residual_column(weighted=None):
     return "diff/sigma" if weighted else "diff"
 
 
+def is_monotonic(values, tolerance=0.01):
+    """True when the finite values only rise, or only fall, within tolerance.
+
+    A 2theta axis climbs (or, on some instruments, descends) from end to end.
+    An intensity column read under the 2theta header wanders, so roughly half
+    its steps go each way. The tolerance absorbs a handful of repeated or
+    out-of-order points without accepting a column of counts.
+    """
+    finite = values[~np.isnan(values)]
+    if len(finite) < 3:
+        return True  # too short to judge, the other checks still apply
+    steps = np.diff(finite)
+    turns = min(int(np.count_nonzero(steps > 0)),
+                int(np.count_nonzero(steps < 0)))
+    return turns <= tolerance * len(steps)
+
+
 def plot_window(theta, x_min=None, x_max=None):
     """2theta limits: the per-sample pair, then the constants, then the data."""
     low = x_min if x_min is not None else PLOT_X_MIN
@@ -201,14 +218,27 @@ def read_gsas2_csv(csv_path, weighted=None):
 
         data = {}
 
-        # 2theta column: header contains '2theta' or starts like 'x,'.
-        theta = next((col for cl, col in col_lower_map.items()
-                      if "2theta" in cl or "x," in cl), None)
-        if theta is None:
+        # 2theta column: header contains '2theta' or starts like 'x,'. The
+        # 'x,' fragment also sits inside ordinary words, so a phase called
+        # 'Max, phase' matches it. Among the candidates take the first one
+        # filled like a data column rather than like a reflection list, so a
+        # short phase column never becomes the axis; fall back to the first
+        # candidate, whose own emptiness is then reported below.
+        candidates = [col for cl, col in col_lower_map.items()
+                      if "2theta" in cl or "x," in cl]
+        if not candidates:
             return None, None, "2theta column not found"
+        theta = next((c for c in candidates
+                      if np.count_nonzero(~np.isnan(clean(df[c])))
+                      > PHASE_MAX_FILL * len(df)), candidates[0])
         data["x"] = clean(df[theta])
         if np.all(np.isnan(data["x"])):
             return None, None, "no valid data in 2theta column"
+        if not is_monotonic(data["x"]):
+            return None, None, (
+                f"the '{theta}' column rises and falls, so it holds counts "
+                "rather than angles and the header names do not line up with "
+                "the columns they sit above. See docs/input-format.md")
 
         # Main pattern columns, in the fixed GSAS-II layout.
         missing = []

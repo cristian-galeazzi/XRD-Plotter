@@ -41,7 +41,12 @@ at step 3.
 3. **Download this repository.** Use the green *Code* button above, then
    *Download ZIP*, then unzip it somewhere you find again.
 
-4. **Open `XRD_Rietveld_Plotter.ipynb`** in VS Code, put your exported `.csv`
+4. **Fix the header of each export once.** GSAS-II writes one header name too
+   many, so the names sit one column left of their data. Delete the `used`
+   cell of the header row in a spreadsheet and shift that row one place left.
+   Details in [the input format reference](docs/input-format.md).
+
+5. **Open `XRD_Rietveld_Plotter.ipynb`** in VS Code, put your corrected `.csv`
    files in the `data/` folder beside it, and press *Run All*.
 
 5. *(Optional)* **Put `Samples_metadata.csv` beside the notebook**, not in
@@ -129,17 +134,29 @@ name the batch uses. Every other control there previews only.
 ## What it accepts
 
 The CSV that the GSAS-II publication-plot dialog saves, not the one from
-*Export → Powder data as*. The 2θ column and a residual column are required,
-`obs`, `calc` and `bkg` are filled with zeros when absent, and every other
-column that holds only a handful of values is read as the reflection
-positions of a phase. Phase names come from your project and need no
-configuration.
+*Export → Powder data as*.
+
+> [!WARNING]
+> That export needs one edit before its first run. GSAS-II writes one header
+> name more than it writes data fields, so every name sits one column left of
+> its own data: the angles arrive under `used` and the counts arrive under
+> `x, 2theta (deg)`. Open the file in a spreadsheet, delete the `used` cell
+> of the header row and shift that row one place left. The notebook refuses a
+> file still shifted rather than drawing it, since the figure would look
+> convincing and be wrong.
+
+After that edit the 2θ column and a residual column are required, `obs`,
+`calc` and `bkg` are filled with zeros when absent, and every other column
+that holds only a handful of values is read as the reflection positions of a
+phase. Phase names come from your project and need no configuration. Phase
+fractions are in no export: you type them into the metadata file.
 
 Both field separators, both decimal marks, UTF-8 and Latin-1, and rows longer
 than the header are handled. A file that cannot be drawn is reported with its
 reason while the rest of the batch runs.
 
-Full contract: [docs/input-format.md](docs/input-format.md).
+Full contract, and the header fix in detail:
+[docs/input-format.md](docs/input-format.md).
 
 ## Limitations
 
@@ -161,9 +178,10 @@ Parsing is bit-exact: every numeric column is read as text and converted with
 Python's `float()` rather than the pandas C parser, which is not correctly
 rounded. [`test_xrd_plotter.py`](test_xrd_plotter.py) asserts that with
 `array_equal`, at zero tolerance, on synthetic exports it builds itself, and
-covers the phase rules, the metadata binding, the window, the residual choice
-and the batch. Run it with `pytest -q`, or run the notebook, which calls it.
-CI does both on every push.
+covers the header-alignment guard, the phase rules, the metadata binding, the
+window, the axis labels and ticks, the residual choice and the batch. Run it
+with `pytest -q`, or run the notebook, which calls it. CI does both on every
+push.
 
 Details: [docs/validation.md](docs/validation.md).
 

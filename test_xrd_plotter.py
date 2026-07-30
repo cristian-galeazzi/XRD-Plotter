@@ -145,6 +145,84 @@ def test_degraded_files_are_isolated(synth, name, reason):
     assert data is None and error == reason, error
 
 
+# 2b. The native GSAS-II export, whose header is one name too long.
+def test_shifted_export_is_refused(tmp_path):
+    # GSAS-II writes 11 header names and 10 fields per row, so every column
+    # is read under its left neighbour's name: 'used' takes the angles and
+    # the 2theta header takes the counts. The figure would still draw.
+    x = np.linspace(10.0, 90.0, N)
+    obs = 1000.0 * np.exp(-((x - 30.0) ** 2) / 2.0) + 50.0
+    head = ("used;x, 2theta (deg);obs;calc;bkg;diff;Alpha;Beta;tick-pos;"
+            "diff/sigma;Axis-limits")
+    rows = [f"{x[i]:.6f};{obs[i]:.6f};{obs[i]:.6f};50;{obs[i] - 50:.6f};"
+            f"{'12.5' if not i else ''};{'30.0' if not i else ''};"
+            f"{'-0.5' if not i else ''};0.1;{'10' if not i else ''}"
+            for i in range(N)]
+    shifted = tmp_path / "native_export.csv"
+    shifted.write_text(head + "\n" + "\n".join(rows) + "\n")
+
+    data, _, error = xp.read_gsas2_csv(shifted)
+    assert data is None, "a shifted export must not be drawn"
+    assert "do not line up" in error, error
+
+
+def test_a_descending_2theta_axis_is_still_accepted(tmp_path):
+    # The guard rejects a column that turns, not one that runs backwards.
+    x = np.linspace(90.0, 10.0, N)
+    df = pd.DataFrame({"2theta": x, "Obs": np.linspace(1.0, 2.0, N),
+                       "diff/sigma": 0.0})
+    csv = tmp_path / "descending.csv"
+    df.to_csv(csv, sep=";", index=False)
+    data, _, error = xp.read_gsas2_csv(csv)
+    assert error is None, error
+    assert np.array_equal(data["x"], x)
+
+
+def test_a_phase_name_containing_x_comma_is_not_taken_as_the_axis(tmp_path):
+    # 'x,' sits inside ordinary words, so 'Max, phase' matches the same rule
+    # as 'x, 2theta (deg)'. The short column must not become the axis.
+    x = np.linspace(10.0, 90.0, 300)
+    df = pd.DataFrame({"Max, phase": pd.Series([30.0, 35.0]).reindex(range(300)),
+                       "x, 2theta (deg)": x,
+                       "obs": np.linspace(1.0, 2.0, 300),
+                       "diff/sigma": np.zeros(300)})
+    csv = tmp_path / "collision.csv"
+    df.to_csv(csv, sep=";", index=False)
+    data, phase_cols, error = xp.read_gsas2_csv(csv)
+    assert error is None, error
+    assert np.array_equal(data["x"], x), "a phase column was read as 2theta"
+    assert phase_cols == ["Max, phase"], phase_cols
+
+
+def test_column_order_does_not_change_the_result(tmp_path):
+    x = np.linspace(10.0, 90.0, 300)
+    obs = np.linspace(1.0, 2.0, 300)
+    base = {"x, 2theta (deg)": x, "obs": obs, "calc": obs, "bkg": obs,
+            "diff": np.zeros(300), "diff/sigma": np.zeros(300),
+            "GOF": pd.Series([1.8]).reindex(range(300)),
+            "Rutile": pd.Series([30.0, 35.0]).reindex(range(300)),
+            "Anatase": pd.Series([32.0]).reindex(range(300))}
+    seen = set()
+    for i, order in enumerate([list(base), list(base)[::-1],
+                               sorted(base), sorted(base, reverse=True)]):
+        csv = tmp_path / f"order_{i}.csv"
+        pd.DataFrame({k: base[k] for k in order}).to_csv(csv, sep=";",
+                                                        index=False)
+        data, phase_cols, error = xp.read_gsas2_csv(csv)
+        assert error is None, error
+        seen.add((data["x"].tobytes(), data["obs"].tobytes(),
+                  tuple(sorted(phase_cols))))
+    assert len(seen) == 1, "the column order changed what was parsed"
+
+
+def test_is_monotonic_tolerates_a_few_out_of_order_points():
+    rising = np.arange(500.0)
+    assert xp.is_monotonic(rising)
+    rising[100], rising[101] = rising[101], rising[100]  # one swapped pair
+    assert xp.is_monotonic(rising), "one glitch must not reject a real axis"
+    assert not xp.is_monotonic(np.tile([1.0, 2.0], 250)), "counts accepted"
+
+
 def test_missing_curves_are_filled_with_zeros(synth):
     data, _, error = xp.read_gsas2_csv(synth.tmp / "no_calc.csv")
     assert error is None
