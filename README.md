@@ -62,8 +62,8 @@ output/                      <- created on the first run, the figures land here
 The first cell installs numpy, pandas, matplotlib, ipywidgets, IPython and
 pytest when they are missing, so you install nothing by hand. From a
 terminal, `pip install -r requirements.txt` does the same in one step. Tested
-on Python 3.13 with numpy 2.4, pandas 3.0, matplotlib 3.10, ipywidgets 8.1,
-IPython 9.11 and pytest 9.1.
+on Python 3.13 and 3.14 with numpy 2.5, pandas 3.0, matplotlib 3.11,
+ipywidgets 8.1, IPython 9.15 and pytest 9.1.
 
 > [!TIP]
 > In VS Code, *Select Kernel* at the top right chooses which Python runs the
@@ -73,12 +73,13 @@ IPython 9.11 and pytest 9.1.
 
 ## What you get
 
-Two files per input file, both from the same drawing, in `output/`:
+Two files per input file, both from the same drawing, sorted by extension
+under `output/`:
 
 | File | Purpose |
 |------|---------|
-| `<name>_XRD_analysis_sqrt.pdf` | Vector, for the manuscript and for editing in Illustrator or Inkscape |
-| `<name>_XRD_analysis_sqrt.png` | 600 dpi raster, for slides and for a quick look |
+| `output/pdf/<name>_XRD_analysis_sqrt.pdf` | Vector, for the manuscript and for editing in Illustrator or Inkscape |
+| `output/png/<name>_XRD_analysis_sqrt.png` | 600 dpi raster, for slides and for a quick look |
 
 The suffix becomes `_linear` with `USE_SQRT = False`, and gains `_counts`
 with `WEIGHTED_RESIDUALS = False`, so the variants never overwrite one
@@ -111,15 +112,16 @@ xp.PHASE_COLORS = {"phase 1": "#1f77b4"}  # pin a colour to a phase name
 |---|---|---|
 | `PLOT_X_MIN`, `PLOT_X_MAX` | `None` | The 2θ window. `None` draws the measured range of each file. `x_min` and `x_max` in the metadata win over these, per sample |
 | `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `diff` in counts when `False`. The axis label follows |
-| `USE_SQRT` | `True` | √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
+| `USE_SQRT` | `True` | Set in section 3 of the notebook, not on the module. √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
 | `PHASE_COLORS`, `PHASE_LABELS` | empty | Colour and legend name per phase. The metadata file does the same, privately |
 
 The batch prints one block per file: the file name, the phases with their
-colours, the figure, then the two files it wrote. A file it fails to draw
-prints its reason and the run continues, and every failure is repeated in the
-summary at the end. Section 4 redraws one file in place on every change and
-prints the metadata row for the window on screen. Nothing there is saved
-until you run the batch again.
+colours, the 2θ window and where it came from, the figure, then the two files
+it wrote. A file it fails to draw prints its reason and the run continues, and
+every failure is repeated in the summary at the end. Section 4 redraws one
+file in place on every change and prints the metadata row for the window on
+screen. Its Save to output button writes that window to `output/` under the
+name the batch uses. Every other control there previews only.
 
 ## What it accepts
 

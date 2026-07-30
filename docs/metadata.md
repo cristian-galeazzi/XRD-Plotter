@@ -29,9 +29,10 @@ sample_3.csv;Sample 3;62;#1f77b4;38;#EE8031;15;80
 Name a fraction or colour column after its phase. `phase_1_pct` feeds the
 `Phase 1` entry, `phase_1_color` paints it. The part before the suffix is
 matched inside the legend name, with underscores read as spaces, so a
-fragment of the name is enough. When two columns match one phase, the longer
-name wins, so `phase_1_color` beats a general `phase_color`. Decimal commas
-work here too.
+fragment of the name is enough. When two colour columns match one phase, the
+longer name wins, so `phase_1_color` beats a general `phase_color`. Two
+`_pct` columns matching one phase print no percentage instead, and say so.
+Decimal commas work here too.
 
 ## Colours stay private
 
@@ -40,8 +41,9 @@ rather than in the notebook. Each run prints what it used, so you read the
 mapping back without opening the figure:
 
 ```
-[sample_3.csv] phases detected: Phase 1 hkl, Phase 2 hkl
-  colours: Phase 1 #1f77b4, Phase 2 #EE8031
+sample_3.csv
+  phases: Phase 1 #1f77b4, Phase 2 #EE8031
+  2theta window: 15 to 80 (metadata)
 ```
 
 A cell holding something matplotlib does not know as a colour is reported and
@@ -56,7 +58,7 @@ its colour under the new name. Both dictionaries ship empty.
 
 - A fraction of zero, or a column you left out, prints the phase with no
   percentage rather than `0%`.
-- An empty `formula` cell falls back to the file name.
+- An empty `formula` cell falls back to the file name without its extension.
 - Two columns matching one phase print no percentage and say so, rather than
   picking one.
 - A column matching no phase in a file is reported for that file.
@@ -68,11 +70,15 @@ its colour under the new name. Both dictionaries ship empty.
 
 Section 4 of the notebook draws one file at a time. Pick it from the
 dropdown, type the 2θ and intensity limits, tick or untick the sqrt intensity
-and the `diff/sigma` panel. The figure redraws on every change, a text box
+and the `diff/sigma` panel. Picking a file fills the 2θ boxes from its row
+here, so it opens on the window section 3 draws, and clearing a box widens
+back to the measured range. The figure redraws on every change, a text box
 when you press Enter or leave it, a checkbox and the dropdown at once, and
-**Save to output** writes the window on screen to `output/`, at full resolution, under the same name section 3 uses. An empty box leaves that end of the axis to the
-setting behind it, the `xp.PLOT_X_MIN` and `xp.PLOT_X_MAX` constants for 2θ
-and the data itself for the intensity. Nothing is written to `output/`.
+**Save to output** writes the window on screen to `output/`, at full
+resolution, under the same name section 3 uses. An empty box leaves that end
+of the axis to the setting behind it, the `xp.PLOT_X_MIN` and `xp.PLOT_X_MAX`
+constants for 2θ and the data itself for the intensity. Every control other
+than that button previews only.
 
 Above the figure the panel prints the row for the window you landed on:
 
