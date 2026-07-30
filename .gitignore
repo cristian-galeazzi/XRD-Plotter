@@ -5,6 +5,8 @@ output/*
 !output/.gitkeep
 Samples_metadata.csv
 *.csv
+# The nbconvert run in docs/validation.md writes this with outputs embedded
+executed.ipynb
 
 # Editor and Jupyter / Python artifacts
 .vscode/
