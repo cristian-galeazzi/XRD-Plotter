@@ -101,13 +101,25 @@ PHASE_COLOR_CYCLE = ("#EE8031", "#1f77b4", "#FF1493", "#2CA02C", "#9467BD",
 
 
 def fmt_pct(p: float) -> str:
-    """Phase fraction label: one decimal, trailing '.0' dropped (62.0 -> 62)."""
+    """Phase fraction label: one decimal, trailing '.0' dropped (62.0 -> 62).
+
+    >>> fmt_pct(62.0)
+    '62'
+    >>> fmt_pct(62.3)
+    '62.3'
+    """
     s = f"{p:.1f}"
     return s[:-2] if s.endswith(".0") else s
 
 
 def residual_column(weighted: bool | None = None) -> str:
-    """Header the lower panel is drawn from, per WEIGHTED_RESIDUALS."""
+    """Header the lower panel is drawn from, per WEIGHTED_RESIDUALS.
+
+    >>> residual_column()
+    'diff/sigma'
+    >>> residual_column(False)
+    'diff'
+    """
     if weighted is None:
         weighted = WEIGHTED_RESIDUALS
     return "diff/sigma" if weighted else "diff"
@@ -147,6 +159,11 @@ def fold(header: str) -> str:
     '2 theta', '2-theta' and '2θ' become one key, and so do 'Rw', 'Rw%' and
     'Rw / %'. Used for the angle header and for NON_PHASE_COLUMNS, which is
     why one entry there covers a column's spellings.
+
+    >>> fold("2-theta")
+    '2theta'
+    >>> fold("Rw%")
+    'rw'
     """
     text = header.lower().replace("θ", "theta")
     for ch in " _-/%()":
@@ -160,6 +177,11 @@ def is_theta_header(header: str) -> bool:
     Matched on the folded header, so '2theta', '2 theta', 'two-theta' and
     '2θ' all count. A header whose first field is 'x' counts as well, which
     covers both 'x' alone and 'x, 2theta (deg)'.
+
+    >>> is_theta_header("2-theta (deg)")
+    True
+    >>> is_theta_header("Yobs")
+    False
     """
     folded = fold(header)
     return ("2theta" in folded or "twotheta" in folded
@@ -178,6 +200,11 @@ def is_monotonic(values: np.ndarray, tolerance: float = 0.01) -> bool:
     is what two exports pasted into one file looks like. Repeated points
     travel nowhere and so count for neither direction, which leaves a column
     of one repeated value with no distance at all: not an axis, and refused.
+
+    >>> is_monotonic(np.array([1.0, 2.0, 3.0]))
+    True
+    >>> is_monotonic(np.array([1.0, 5.0, 2.0, 4.0, 3.0]))
+    False
     """
     finite = values[~np.isnan(values)]
     if len(finite) < 3:
@@ -192,7 +219,13 @@ def is_monotonic(values: np.ndarray, tolerance: float = 0.01) -> bool:
 
 def plot_window(theta: np.ndarray, x_min: float | None = None,
                 x_max: float | None = None) -> tuple[float, float]:
-    """2theta limits: the per-sample pair, then the constants, then the data."""
+    """2theta limits: the per-sample pair, then the constants, then the data.
+
+    >>> plot_window(np.array([10.0, 20.0, 30.0]))
+    (10.0, 30.0)
+    >>> plot_window(np.array([10.0, 20.0, 30.0]), x_min=12.0, x_max=28.0)
+    (12.0, 28.0)
+    """
     low = x_min if x_min is not None else PLOT_X_MIN
     high = x_max if x_max is not None else PLOT_X_MAX
     return (float(np.nanmin(theta)) if low is None else float(low),
@@ -200,7 +233,13 @@ def plot_window(theta: np.ndarray, x_min: float | None = None,
 
 
 def phase_label(column: str) -> str:
-    """Legend name for a phase column: 'Phase 1 hkl' -> 'Phase 1'."""
+    """Legend name for a phase column: 'Phase 1 hkl' -> 'Phase 1'.
+
+    >>> phase_label("Phase 1 hkl")
+    'Phase 1'
+    >>> phase_label("phase2")
+    'Phase2'
+    """
     label = column.strip()
     if label.lower().endswith("hkl"):
         label = label[:-3].strip()
@@ -213,6 +252,10 @@ def longest_match(mapping: dict[str, str] | None, label: str) -> str | None:
 
     The longest key wins so that a specific column ('phase 1_color') beats a
     general one ('phase_color') instead of resolving on dictionary order.
+
+    >>> longest_match({"phase": "gray", "phase 1": "red"}, "Phase 1")
+    'red'
+    >>> longest_match({"phase": "gray"}, "Other")
     """
     keys = [k for k in (mapping or {}) if k and k in label.lower()]
     return mapping[max(keys, key=len)] if keys else None
@@ -225,6 +268,9 @@ def phase_colors(ordered_labels: list[str],
     Both mappings are keyed by a fragment of the legend name. Repeated
     labels share one colour and consume one slot of the cycle, matching the
     single legend entry they get.
+
+    >>> phase_colors(["Quartz", "Quartz", "Calcite"])
+    {'Quartz': '#EE8031', 'Calcite': '#1f77b4'}
     """
     colors, cycled = {}, 0
     for label in dict.fromkeys(ordered_labels):
@@ -238,7 +284,14 @@ def phase_colors(ordered_labels: list[str],
 
 
 def phase_fraction(pct: dict[str, float], label: str) -> float:
-    """Percentage for one phase, matched on the metadata key as a fragment."""
+    """Percentage for one phase, matched on the metadata key as a fragment.
+
+    >>> phase_fraction({"phase 1": 62.0}, "Phase 1")
+    62.0
+    >>> phase_fraction({"a": 1.0, "ab": 2.0}, "ab")
+      ! metadata columns a_pct, ab_pct all match 'ab', no percentage printed.
+    0.0
+    """
     hits = sorted(k for k in pct if k in label.lower())
     if len(hits) > 1:
         print(f"  ! metadata columns {', '.join(h + '_pct' for h in hits)} "
@@ -256,6 +309,21 @@ def read_gsas2_csv(csv_path: str | Path, weighted: bool | None = None
     Returns (data, phase_cols, error): on success error is None, on failure
     data is None and error holds the reason. Non-fatal issues are printed
     as warnings. 'weighted' overrides WEIGHTED_RESIDUALS for this call.
+
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> rows = ["2theta;Obs;Calc;Bkg;diff/sigma", "10.0;5;4;1;0.5",
+    ...         "10.5;6;5;1;0.4", "11.0;7;6;1;-0.3"]
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     p = Path(d) / "sample.csv"
+    ...     with open(p, "w") as fh:
+    ...         for row in rows:
+    ...             print(row, file=fh)
+    ...     data, phase_cols, error = read_gsas2_csv(p)
+    >>> error is None
+    True
+    >>> sorted(data)
+    ['bkg', 'calc', 'obs', 'resid', 'x']
     """
     csv_path = Path(csv_path)
     warnings = []
@@ -407,6 +475,18 @@ def load_metadata(metadata_path: str | Path) -> pd.DataFrame:
     '<phase>_pct' and one '<phase>_color' column per phase, and an
     optional 'x_min'/'x_max' pair. Returns an empty DataFrame when the
     file is absent. The contents are never displayed by this notebook.
+
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     p = Path(d) / "meta.csv"
+    ...     with open(p, "w") as fh:
+    ...         print("filename;formula", file=fh)
+    ...         print("sample.csv;NaAlSi3O8", file=fh)
+    ...     df = load_metadata(p)
+    Metadata loaded for 1 sample(s).
+    >>> list(df.index)
+    ['sample.csv']
     """
     metadata_path = Path(metadata_path)
     if not metadata_path.is_file():
@@ -430,7 +510,12 @@ def load_metadata(metadata_path: str | Path) -> pd.DataFrame:
 
 
 def to_number(value: object) -> float | None:
-    """One metadata cell as a float, or None when it is blank or not a number."""
+    """One metadata cell as a float, or None when it is blank or not a number.
+
+    >>> to_number("12,5")
+    12.5
+    >>> to_number("abc")
+    """
     try:
         number = float(str(value).replace(",", "."))  # decimal comma
     except (ValueError, TypeError):
@@ -439,7 +524,13 @@ def to_number(value: object) -> float | None:
 
 
 def to_color(value: object) -> str | None:
-    """One metadata cell as a colour, or None when blank or not a colour."""
+    """One metadata cell as a colour, or None when blank or not a colour.
+
+    >>> to_color("red")
+    'red'
+    >>> to_color("notacolor")
+      ! 'notacolor' is not a colour, the cycle is used instead.
+    """
     text = str(value).strip()
     if not text or text.lower() == "nan":
         return None
@@ -454,6 +545,11 @@ def metadata_keys(columns: Iterable[str], suffix: str) -> dict[str, str]:
 
     A column named exactly like the suffix carries no phase name and is
     skipped, since its empty key would match every phase.
+
+    >>> metadata_keys(["phase_1_pct", "sample_id"], "_pct")
+    {'phase 1': 'phase_1_pct'}
+    >>> metadata_keys(["_pct"], "_pct")
+    {}
     """
     return {c[:-len(suffix)].replace("_", " ").strip(): c for c in columns
             if c.endswith(suffix) and len(c) > len(suffix)}
@@ -468,6 +564,14 @@ def sample_info(meta_df: pd.DataFrame, filename: str, default_name: str
     by the part before the suffix with underscores as spaces, so
     'phase_1_color' reaches the phase named 'Phase 1' in the figure.
     'x_min' and 'x_max' are returned as given, for plot_window to apply.
+
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({"formula": ["NaAlSi3O8"],
+    ...                    "phase1_pct": ["62.0"]},
+    ...                   index=pd.Index(["a.csv"], name="filename"))
+    >>> name, pct, colors, window = sample_info(df, "a.csv", "a")
+    >>> name, pct
+    ('NaAlSi3O8', {'phase1': 62.0})
     """
     name, pct, colors, window = default_name, {}, {}, (None, None)
     if filename not in meta_df.index:
@@ -496,7 +600,17 @@ def prepare_data(data: dict[str, np.ndarray], phase_cols: list[str],
                  use_sqrt: bool = True
                  ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray,
                             np.ndarray, dict[str, np.ndarray]]:
-    """Mask invalid points; optionally apply the display-only sqrt transform."""
+    """Mask invalid points; optionally apply the display-only sqrt transform.
+
+    >>> data = {"x": np.array([1.0, np.nan]), "obs": np.array([4.0, 5.0]),
+    ...         "calc": np.array([9.0, 1.0]), "bkg": np.array([0.0, 0.0]),
+    ...         "resid": np.array([0.0, 0.0])}
+    >>> x, obs, calc, bkg, resid, phases = prepare_data(data, [])
+    >>> len(x)
+    1
+    >>> obs
+    array([2.])
+    """
     mask = ~(np.isnan(data["x"]) | np.isnan(data["obs"]))
     if not mask.any():
         raise ValueError("no point has both a 2theta and an obs value")
@@ -526,7 +640,15 @@ def create_plot(theta: np.ndarray, obs: np.ndarray, calc: np.ndarray,
                 ylim: tuple[float | None, float | None] = (None, None),
                 colors: dict[str, str] | None = None,
                 weighted: bool | None = None) -> Figure:
-    """Two-panel Rietveld plot; returns the matplotlib Figure."""
+    """Two-panel Rietveld plot; returns the matplotlib Figure.
+
+    Typical use, after read_gsas2_csv and prepare_data::
+
+        data, phase_cols, error = read_gsas2_csv("sample.csv")
+        if error is None:
+            fig = create_plot(*prepare_data(data, phase_cols),
+                              "Sample", pct={}, colors={})
+    """
     fig, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(FIGURE_WIDTH, FIGURE_HEIGHT), dpi=110,
         gridspec_kw={"height_ratios": [4, 1]}, sharex=True)
@@ -642,7 +764,11 @@ def create_plot(theta: np.ndarray, obs: np.ndarray, calc: np.ndarray,
 
 def report_colors(phase_cols: list[str],
                   colors: dict[str, str] | None) -> None:
-    """Print each detected phase with the colour it was drawn in."""
+    """Print each detected phase with the colour it was drawn in.
+
+    >>> report_colors(["Quartz hkl"], None)
+      phases: Quartz #EE8031
+    """
     labels = list(dict.fromkeys(sorted(phase_label(c) for c in phase_cols)))
     if not labels:
         print("  phases: none detected")
@@ -661,6 +787,13 @@ def replot_file(csv_path: str | Path, metadata_file: str | Path,
     Returns (figure, metadata_line): the line is the row to paste into the
     metadata file so that the batch run reproduces this 2theta window.
     Raises ValueError when the file cannot be read or drawn.
+
+    Typical use, in section 4 of the notebook::
+
+        fig, line = replot_file("sample.csv", "Samples_metadata.csv",
+                                x_min=20, x_max=60)
+        show_inline(fig)
+        print(line)  # paste into the metadata file to keep this window
     """
     csv_path = Path(csv_path)
     data, phase_cols, error = read_gsas2_csv(csv_path, weighted=weighted)
@@ -687,6 +820,11 @@ def output_basename(stem: str, use_sqrt: bool = True,
     weighted defaults to the WEIGHTED_RESIDUALS setting; pass it explicitly
     (as section 4 does) so a figure saved with the other residual mode does
     not overwrite the batch file under the same name.
+
+    >>> output_basename("sample1")
+    'sample1_XRD_analysis_sqrt'
+    >>> output_basename("sample1", weighted=False)
+    'sample1_XRD_analysis_sqrt_unweighted'
     """
     weighted = WEIGHTED_RESIDUALS if weighted is None else weighted
     return (f"{stem}_XRD_analysis{'_sqrt' if use_sqrt else '_linear'}"
@@ -698,6 +836,14 @@ def save_figure(fig: Figure, output_folder: str | Path, base: str) -> str:
 
     Sorting by extension keeps a large output folder tidy. Returns the base
     name, which the caller pairs with the 'pdf/' and 'png/' subfolders.
+
+    >>> import tempfile, os
+    >>> from matplotlib.figure import Figure
+    >>> fig = Figure()
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     base = save_figure(fig, d, "sample")
+    ...     sorted(os.listdir(d))
+    ['pdf', 'png']
     """
     out_dir = Path(output_folder)
     (out_dir / "pdf").mkdir(parents=True, exist_ok=True)
@@ -715,6 +861,17 @@ def sample_window(metadata_file: str | Path, filename: str
 
     Section 4 prefills its 2theta boxes with this, so a file opens on the
     same window the batch would draw instead of the full measured range.
+
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     p = Path(d) / "meta.csv"
+    ...     with open(p, "w") as fh:
+    ...         print("filename;x_min;x_max", file=fh)
+    ...         print("a.csv;20;40", file=fh)
+    ...     sample_window(p, "a.csv")
+    Metadata loaded for 1 sample(s).
+    (20.0, 40.0)
     """
     _, _, _, window = sample_info(load_metadata(metadata_file), filename,
                                   filename)
@@ -728,6 +885,11 @@ def show_inline(fig: Figure) -> None:
     Jupyter, JupyterLab and VS Code, where relying on the active backend to
     honour ``plt.show()`` does not. Outside a kernel (a plain script, the
     pytest run) there is no display, so this returns without drawing.
+
+    Typical use, inside a notebook cell, after create_plot::
+
+        fig = create_plot(theta, obs, calc, bkg, resid, phases, name, pct)
+        show_inline(fig)
     """
     try:
         from IPython import get_ipython
@@ -747,7 +909,13 @@ def process_folder(data_folder: str | Path,
                    output_folder: str | Path,
                    use_sqrt: bool = True, show: bool = True
                    ) -> list[tuple[str, str, str]]:
-    """Plot every GSAS-II CSV export in data_folder; save PDF + PNG."""
+    """Plot every GSAS-II CSV export in data_folder; save PDF + PNG.
+
+    Typical use, section 3 of the notebook::
+
+        results = process_folder("data", "Samples_metadata.csv", "output")
+        failed = [name for name, status, _ in results if status == "error"]
+    """
     data_dir = Path(data_folder)
     data_dir.mkdir(exist_ok=True)  # first run: created empty, ready for your files
 
