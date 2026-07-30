@@ -37,6 +37,14 @@ PREVIEW_WIDTH_PX = 640                 # on-screen width of the section-3 inline
 # few units. False draws the raw diff in counts, where the tall reflections
 # dominate. Files carry the suffix '_counts' when this is False.
 WEIGHTED_RESIDUALS = True
+# Smallest half height of the weighted residual panel, in units of sigma. The
+# panel is never narrower than this, so every well-fitted pattern is drawn on
+# the same residual scale and two figures can be read side by side. A fit that
+# leaves a residual above it widens the panel to fit, since clipping the misfit
+# is the one thing this panel must not do. Raise it to flatten the trace,
+# lower it to magnify. It does not apply to the raw diff, which has no unit
+# that means the same thing twice.
+RESIDUAL_SPAN = 5.0
 
 COLOR_OBS = "#000000"
 COLOR_CALC = "#D62728"
@@ -101,6 +109,32 @@ def residual_column(weighted=None):
     if weighted is None:
         weighted = WEIGHTED_RESIDUALS
     return "diff/sigma" if weighted else "diff"
+
+
+def residual_limits(resid, weighted=None):
+    """Symmetric limits for the lower panel, so zero sits at its middle.
+
+    The half height is the largest residual drawn, with a margin above it. In
+    the weighted panel it is never smaller than RESIDUAL_SPAN, because
+    diff/sigma is measured in standard deviations of the point and so means
+    the same thing in every sample: a floor puts every well-fitted pattern on
+    one scale, and only a fit that genuinely misses widens the panel. The raw
+    diff is in counts, which are comparable across nothing, so it gets no
+    floor and only the centring.
+
+    >>> residual_limits(np.array([-1.0, 2.0]), weighted=True)
+    (-5.0, 5.0)
+    >>> residual_limits(np.array([-2.0, 1.0]), weighted=False)
+    (-2.1, 2.1)
+    """
+    finite = resid[~np.isnan(resid)]
+    half = 1.05 * float(np.max(np.abs(finite))) if len(finite) else 0.0
+    if residual_column(weighted) == "diff/sigma":
+        half = max(half, RESIDUAL_SPAN)
+    # A residual that is flat, empty or all NaN leaves no scale to take, and
+    # matplotlib refuses limits that are equal. RESIDUAL_SPAN is an arbitrary
+    # but harmless choice here: the panel is empty either way.
+    return (-half, half) if half > 0.0 else (-RESIDUAL_SPAN, RESIDUAL_SPAN)
 
 
 def fold(header):
@@ -571,12 +605,13 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
     ax2.set_ylabel(r"diff/$\sigma$" if residual_column(weighted) == "diff/sigma"
                    else r"diff / a.u.", fontsize=FONT_SIZE_LABEL)
     ax2.set_xlim(x_low, x_high)
-    # The residual axis loses its numbers too, and no line is drawn at zero:
-    # the panel shows the shape of the misfit, not its size. Symmetric limits
-    # would put zero at the middle, but they would also lift the trace out of
-    # the space it now keeps below the tick rows, and the raw diff is
-    # asymmetric enough for that to be a visible move. The limits stay on
-    # autoscale, so the trace fills the panel it is given.
+    # The residual axis loses its numbers too, and no line is drawn at zero.
+    # Zero is held at the middle of the panel instead, by limits symmetric
+    # about it: under autoscale it landed wherever the misfit happened to be
+    # asymmetric, so the trace sat at a different height in every sample and
+    # no two figures could be read side by side.
+    ax2.set_ylim(*residual_limits(resid[visible] if visible.any() else resid,
+                                  weighted))
     ax2.tick_params(direction="in", right=False, left=False, labelleft=False,
                     bottom=True, width=1.5, length=6,
                     labelsize=FONT_SIZE_TICK)

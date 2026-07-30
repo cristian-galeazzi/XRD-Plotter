@@ -99,10 +99,14 @@ panel with the residuals. The legend names the sample and the phase fractions.
 Neither y axis carries numbers nor tick marks. Intensity in a diffractogram is
 an arbitrary unit, and an axis of tick labels invites the reader to compare
 heights across measurements where no comparison holds. The residual panel
-follows the same rule, and carries no line at zero either, so it shows the
-shape of the misfit rather than its size. The 2θ axis keeps its numbers, drawn
-once under the lower panel. Axis labels read as `quantity / unit`, the IUPAC
-form, so no parentheses appear around `a.u.` or `°`.
+follows the same rule and carries no line at zero either. Zero is held at the
+middle of that panel by limits symmetric about it, and the weighted panel is
+never narrower than `RESIDUAL_SPAN` standard deviations, so every well-fitted
+sample is drawn on one residual scale and two figures can be read side by
+side. A fit that misses widens the panel rather than being clipped. The 2θ
+axis keeps its numbers, drawn once under the lower panel. Axis labels read as
+`quantity / unit`, the IUPAC form, so no parentheses appear around `a.u.` or
+`°`.
 
 ## Settings
 
@@ -120,6 +124,7 @@ xp.PHASE_COLORS = {"phase 1": "#1f77b4"}  # pin a colour to a phase name
 |---|---|---|
 | `PLOT_X_MIN`, `PLOT_X_MAX` | `None` | The 2θ window. `None` draws the measured range of each file. `x_min` and `x_max` in the metadata win over these, per sample |
 | `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `diff` in counts when `False`. The axis label follows |
+| `RESIDUAL_SPAN` | `5.0` | Narrowest the weighted residual panel is drawn, in standard deviations. Raise it to flatten the trace, lower it to magnify. A larger residual widens the panel instead of being clipped, and the raw `diff` gets no floor |
 | `USE_SQRT` | `True` | Set in section 3 of the notebook, not on the module. √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
 | `PHASE_COLORS`, `PHASE_LABELS` | empty | Colour and legend name per phase. The metadata file does the same, privately |
 

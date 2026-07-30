@@ -476,10 +476,8 @@ def test_residual_panel_carries_the_trace_alone(synth, drawn, weighted):
     """Nothing is drawn on the panel besides the residual, and it is not clipped.
 
     The panel carries no numbers, so a line at zero used to be the only
-    reference on it, and in the raw diff mode that line sat above the middle:
-    the residual is asymmetric, its negative misfit spikes deeper than the
-    positive ones. The line goes rather than the placement, because the
-    autoscaled trace is what sits clear of the tick rows above.
+    reference on it. The line goes and the limits hold zero at the middle
+    instead, which is a reference the eye reads without anything drawn on it.
     """
     data, phase_cols, error = xp.read_gsas2_csv(synth.full, weighted=weighted)
     assert error is None, error
@@ -490,6 +488,37 @@ def test_residual_panel_carries_the_trace_alone(synth, drawn, weighted):
     low, high = lower.get_ylim()
     assert low <= np.nanmin(data["resid"]) and high >= np.nanmax(data["resid"]), (
         f"the trace is clipped: panel {low} to {high}")
+
+
+def test_the_weighted_panel_keeps_one_scale_across_samples(synth, drawn):
+    """Zero at the middle, and the weighted panel no narrower than the span.
+
+    Autoscale put the trace at a different height in every sample, since the
+    misfit is not symmetric, and no two figures could be read side by side.
+    diff/sigma is in standard deviations of the point, so a floor in those
+    units is the same scale everywhere; the raw diff is in counts and has no
+    such unit, so it is centred and nothing more.
+    """
+    data, phase_cols, error = xp.read_gsas2_csv(synth.full)
+    assert error is None, error
+    theta, o, c, b, resid, phases = xp.prepare_data(data, phase_cols)
+
+    fig = xp.create_plot(theta, o, c, b, resid, phases, drawn.name, drawn.pct)
+    assert fig.axes[1].get_ylim() == (-xp.RESIDUAL_SPAN, xp.RESIDUAL_SPAN)
+
+    # A residual past the floor widens the panel; clipping the misfit is the
+    # one thing this panel must not do.
+    spiked = resid.copy()
+    spiked[0] = -3.0 * xp.RESIDUAL_SPAN
+    fig = xp.create_plot(theta, o, c, b, spiked, phases, drawn.name, drawn.pct)
+    low, high = fig.axes[1].get_ylim()
+    assert low == -high and low <= spiked.min(), (low, high)
+
+    # No floor on the raw diff: a small one keeps a small panel.
+    fig = xp.create_plot(theta, o, c, b, np.full_like(resid, 0.01), phases,
+                         drawn.name, drawn.pct, weighted=False)
+    low, high = fig.axes[1].get_ylim()
+    assert low == -high and high < xp.RESIDUAL_SPAN, (low, high)
 
 
 # 12. The function behind the interactive panel.
