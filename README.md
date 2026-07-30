@@ -148,8 +148,14 @@ The CSV that the GSAS-II publication-plot dialog saves, not the one from
 After that edit the 2θ column and a residual column are required, `obs`,
 `calc` and `bkg` are filled with zeros when absent, and every other column
 that holds only a handful of values is read as the reflection positions of a
-phase. Phase names come from your project and need no configuration. Phase
-fractions are in no export: you type them into the metadata file.
+phase. Phase fractions are in no export: you type them into the metadata
+file.
+
+Leave the header names GSAS-II wrote and rename the phase columns only. The
+pattern columns are found by their names, so `obs` under another name is
+drawn flat and a renamed residual column stops the file. A phase column is
+the opposite: whatever you call it is what the legend prints, so `Phase 1`
+becomes `Anatase` by editing that header alone.
 
 Both field separators, both decimal marks, UTF-8 and Latin-1, and rows longer
 than the header are handled. A file that cannot be drawn is reported with its

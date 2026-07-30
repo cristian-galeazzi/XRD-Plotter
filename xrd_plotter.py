@@ -96,6 +96,20 @@ def residual_column(weighted=None):
     return "diff/sigma" if weighted else "diff"
 
 
+def is_theta_header(header):
+    """True when a column header names the diffraction angle.
+
+    Exporters spell it several ways, so the header is folded before it is
+    matched: case, the Greek theta, and the spaces, underscores and hyphens
+    inside '2 theta' or 'two-theta'. A header whose first field is 'x' counts
+    as well, which covers both 'x' alone and 'x, 2theta (deg)'.
+    """
+    text = header.lower().replace("θ", "theta")
+    folded = text.replace(" ", "").replace("_", "").replace("-", "")
+    return ("2theta" in folded or "twotheta" in folded
+            or text.split(",")[0].strip() == "x")
+
+
 def is_monotonic(values, tolerance=0.01):
     """True when the finite values only rise, or only fall, within tolerance.
 
@@ -218,14 +232,11 @@ def read_gsas2_csv(csv_path, weighted=None):
 
         data = {}
 
-        # 2theta column: header contains '2theta' or starts like 'x,'. The
-        # 'x,' fragment also sits inside ordinary words, so a phase called
-        # 'Max, phase' matches it. Among the candidates take the first one
-        # filled like a data column rather than like a reflection list, so a
-        # short phase column never becomes the axis; fall back to the first
-        # candidate, whose own emptiness is then reported below.
-        candidates = [col for cl, col in col_lower_map.items()
-                      if "2theta" in cl or "x," in cl]
+        # 2theta column, across the spellings exporters use. Among the
+        # candidates take the first one filled like a data column rather than
+        # like a reflection list, so a phase column never becomes the axis;
+        # fall back to the first, whose own emptiness is reported below.
+        candidates = [col for col in df.columns if is_theta_header(col)]
         if not candidates:
             return None, None, "2theta column not found"
         theta = next((c for c in candidates

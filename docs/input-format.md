@@ -31,10 +31,13 @@ used;x, 2theta (deg);obs;calc;bkg;diff;<Phase A>;<Phase B>;tick-pos;diff/sigma;A
 ```
 
 Open the file in a spreadsheet, delete the `used` cell of the header row and
-shift the rest of that row one place left. Every name then sits above its own
-column. Check a single data row before saving: the first number is an angle
-inside your scan range, and the column headed `obs` holds counts. Save as
-CSV.
+shift the rest of that row one place left.
+
+**Then read one data row across and check every name against the values under
+it.** The angle column climbs through your scan range, `obs` and `calc` hold
+counts of the same size, `bkg` is the small smooth one, and a phase column is
+nearly empty. This takes a moment and catches an export that shifted a
+different way from the one described here. Save as CSV.
 
 Deleting the columns the figure never uses is safe and keeps the file
 readable, `used`, `diff`, `tick-pos` and `Axis-limits` among them. Two
@@ -63,7 +66,7 @@ The notebook reads what it needs and ignores the rest.
 
 | Column | Header must | Required | Content |
 |---|---|---|---|
-| 2θ | contain `2theta` or `x,`, as `x, 2theta (deg)` does | Yes | Diffraction angle in degrees |
+| 2θ | name the angle: `2theta`, `2 theta`, `2θ`, `two-theta`, `x` or `x, 2theta (deg)` | Yes | Diffraction angle in degrees |
 | Observed | be `obs` | No, though the figure is empty without it | Measured pattern |
 | Calculated | be `calc` | No | Refined pattern |
 | Background | be `bkg` | No | Refined background |
@@ -72,6 +75,19 @@ The notebook reads what it needs and ignores the rest.
 
 Matching ignores case and tolerates extra text, so `obs` and `Obs` name the
 same column, and both `Phase 1` and `Phase 1 hkl` are recognised.
+
+**Keep the names of the pattern columns.** They are found by their names, so
+`obs`, `calc` or `bkg` renamed is filled with zeros and drawn flat, and a
+renamed `diff/sigma` stops the file. The 2θ header is the tolerant one:
+`2theta`, `2 theta`, `2θ`, `two-theta`, `2theta_deg`, `x` and
+`x, 2theta (deg)` all work, in any case, so an export from another program
+needs no editing there.
+
+**Rename the phase columns.** A phase column arrives with whatever GSAS-II
+had for it, the name you gave the phase in the project or the file it came
+from. Put the real phase there and it goes straight into the legend, with no
+setting to change: `Phase 1` becomes `Anatase` by editing that header
+alone.
 
 Two columns are required, the 2θ and the residuals. A missing `obs`, `calc`
 or `bkg` is filled with zeros and reported on screen, so a partial file still

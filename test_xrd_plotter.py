@@ -178,6 +178,21 @@ def test_a_descending_2theta_axis_is_still_accepted(tmp_path):
     assert np.array_equal(data["x"], x)
 
 
+@pytest.mark.parametrize("header", [
+    "x, 2theta (deg)", "2theta", "2Theta (deg)", "X, 2THETA", "x, deg",
+    "angle, 2theta", "2theta_deg", "2θ", "2 theta (deg)", "two-theta", "x",
+])
+def test_theta_header_spellings_accepted(header):
+    assert xp.is_theta_header(header), header
+
+
+@pytest.mark.parametrize("header", [
+    "theta", "angle", "obs", "counts", "intensity", "Max, phase", "tick-pos",
+])
+def test_theta_header_spellings_refused(header):
+    assert not xp.is_theta_header(header), header
+
+
 def test_a_phase_name_containing_x_comma_is_not_taken_as_the_axis(tmp_path):
     # 'x,' sits inside ordinary words, so 'Max, phase' matches the same rule
     # as 'x, 2theta (deg)'. The short column must not become the axis.
