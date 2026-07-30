@@ -155,7 +155,7 @@ Leave the header names GSAS-II wrote and rename the phase columns only. The
 pattern columns are found by their names, so `obs` under another name is
 drawn flat and a renamed residual column stops the file. A phase column is
 the opposite: whatever you call it is what the legend prints, so `Phase 1`
-becomes `Anatase` by editing that header alone.
+becomes `Rutile` by editing that header alone.
 
 Both field separators, both decimal marks, UTF-8 and Latin-1, and rows longer
 than the header are handled. A file that cannot be drawn is reported with its

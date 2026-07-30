@@ -103,8 +103,8 @@ is free, which is what lets an export from another program run unedited.
 **Rename the phase columns.** A phase column arrives with whatever GSAS-II
 had for it, the name you gave the phase in the project or the file it came
 from. Put the real phase there and it goes straight into the legend, with no
-setting to change: `Phase 1` becomes `Anatase` by editing that header
-alone. A trailing `hkl` is dropped, so `Anatase hkl` prints the same.
+setting to change: `Phase 1` becomes `Rutile` by editing that header alone.
+A trailing `hkl` is dropped, so `Rutile hkl` prints the same.
 
 Two columns are required, the 2θ and the residuals. A missing `obs`, `calc`
 or `bkg` is filled with zeros and reported on screen, so a partial file still
@@ -117,8 +117,9 @@ column 'diff/sigma' not found`.
 **By elimination, not from a list of names.** The engine knows the headers
 GSAS-II writes itself, `used`, `diff`, `tick-pos`, `Axis-limits`, `excluded`
 and the pattern columns above, together with the fit statistics people keep
-beside the pattern, `GOF`, `Rw`, `Rwp`, `Rp`, `Rexp` and `chi2`. All of them
-are in `NON_PHASE_COLUMNS`. Any other column counts as a phase when it fills
+beside the pattern, `GOF`, `Rw`, `Rwp`, `Rexp` and `chi2`. All of them are in
+`NON_PHASE_COLUMNS`, and `Rp` deliberately is not, since it also labels a
+phase. Any other column counts as a phase when it fills
 at most half the rows, the share in `PHASE_MAX_FILL`. A column above that
 share is named on screen and left undrawn rather than dropped in silence, so
 a reflection list dense enough to cross the ceiling tells you why it is
