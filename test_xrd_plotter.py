@@ -19,7 +19,7 @@ import xrd_plotter as xp
 
 N = 500
 CONFIG = ("PLOT_X_MIN", "PLOT_X_MAX", "WEIGHTED_RESIDUALS", "PHASE_LABELS",
-          "PHASE_COLORS", "PHASE_MAX_FILL")
+          "PHASE_COLORS", "PHASE_MAX_FILL", "NON_PHASE_COLUMNS")
 
 
 @pytest.fixture(autouse=True)
@@ -278,6 +278,41 @@ def test_only_phases_are_detected_in_a_full_export(synth):
 def test_repeated_header_is_not_a_phase(synth):
     _, phase_cols, error = xp.read_gsas2_csv(synth.tmp / "repeated_header.csv")
     assert error is None and phase_cols == [], phase_cols
+
+
+@pytest.mark.parametrize("header, drawn", [
+    ("Rw / %", False), ("Rw%", False), ("rw", False), ("Rwp / %", False),
+    ("Rp", False), ("chi2", False), ("GOF", False), ("Tick-Pos", False),
+    ("Rw phase", True), ("Rutile", True),
+])
+def test_fit_statistics_are_not_read_as_phases(tmp_path, header, drawn):
+    # A statistic kept beside the pattern is sparse, so the reflection-list
+    # test alone would give it a tick row. The blocklist is folded, so one
+    # entry 'rw' covers 'Rw', 'Rw%' and 'Rw / %', and a real phase whose name
+    # merely starts the same way is untouched.
+    x = np.linspace(10.0, 90.0, 300)
+    pd.DataFrame({"x, 2theta (deg)": x, "obs": np.linspace(1.0, 2.0, 300),
+                  "diff/sigma": np.zeros(300),
+                  header: pd.Series([30.0, 40.0]).reindex(range(300))}).to_csv(
+        tmp_path / "stat.csv", sep=";", index=False)
+    _, phase_cols, error = xp.read_gsas2_csv(tmp_path / "stat.csv")
+    assert error is None, error
+    assert (header in phase_cols) is drawn, phase_cols
+
+
+def test_a_header_added_to_the_blocklist_takes_effect(tmp_path):
+    # The knob the README points at: assigning to the module must work on the
+    # next call, so the folded set cannot be built once at import.
+    x = np.linspace(10.0, 90.0, 300)
+    pd.DataFrame({"x, 2theta (deg)": x, "obs": np.linspace(1.0, 2.0, 300),
+                  "diff/sigma": np.zeros(300),
+                  "Scan note": pd.Series([30.0]).reindex(range(300))}).to_csv(
+        tmp_path / "note.csv", sep=";", index=False)
+    _, phase_cols, _ = xp.read_gsas2_csv(tmp_path / "note.csv")
+    assert phase_cols == ["Scan note"]
+    xp.NON_PHASE_COLUMNS = xp.NON_PHASE_COLUMNS | {"scan note"}
+    _, phase_cols, _ = xp.read_gsas2_csv(tmp_path / "note.csv")
+    assert phase_cols == [], "the blocklist addition was ignored"
 
 
 def test_column_too_full_is_reported_not_drawn(synth, capsys):

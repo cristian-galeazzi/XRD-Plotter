@@ -106,13 +106,23 @@ column 'diff/sigma' not found`.
 
 **By elimination, not from a list of names.** The engine knows the headers
 GSAS-II writes itself, `used`, `diff`, `tick-pos`, `Axis-limits`, `excluded`
-and the pattern columns above, listed in `NON_PHASE_COLUMNS`. Any other
-column counts as a phase when it fills at most half the rows, the share in
-`PHASE_MAX_FILL`. A column above that share is named on screen and left
-undrawn rather than dropped in silence, so a reflection list dense enough to
-cross the ceiling tells you why it is missing. A header repeated in the
-export, which pandas renames `tick-pos.1`, is matched against the blocklist
-without its suffix.
+and the pattern columns above, together with the fit statistics people keep
+beside the pattern, `GOF`, `Rw`, `Rwp`, `Rp`, `Rexp` and `chi2`. All of them
+are in `NON_PHASE_COLUMNS`. Any other column counts as a phase when it fills
+at most half the rows, the share in `PHASE_MAX_FILL`. A column above that
+share is named on screen and left undrawn rather than dropped in silence, so
+a reflection list dense enough to cross the ceiling tells you why it is
+missing. A header repeated in the export, which pandas renames `tick-pos.1`,
+is matched against the blocklist without its suffix.
+
+Blocklist entries are compared folded, ignoring case, spaces and the
+punctuation people add, so the single entry `rw` covers `Rw`, `Rw%` and
+`Rw / %`. A phase whose name merely begins the same way, `Rw phase`, is
+still drawn. To keep a column of your own out of the legend, add its header:
+
+```python
+xp.NON_PHASE_COLUMNS = xp.NON_PHASE_COLUMNS | {"scan note"}
+```
 
 Your phase names need no configuration. Name them as you like in GSAS-II and
 they arrive in the legend. Every run prints the phases it found, per file, so

@@ -54,13 +54,16 @@ FONT_SIZE_LEGEND = 16
 FONT_SIZE_TICK = 16
 
 # --- Phase columns ----------------------------------------------------
-# Headers GSAS-II writes itself. Everything else that holds only a few
-# values is taken to be the reflection positions of a phase, so phases are
-# found by their own names instead of a keyword list.
+# Headers GSAS-II writes itself, plus the fit statistics people keep beside
+# the pattern. Everything else that holds only a few values is taken to be
+# the reflection positions of a phase, so phases are found by their own
+# names instead of a keyword list. Entries are compared folded, so 'rw'
+# covers 'Rw', 'Rw%' and 'Rw / %' without an entry for each spelling. Add
+# your own header here to keep a column of your own out of the legend.
 NON_PHASE_COLUMNS = frozenset({
     "used", "obs", "calc", "bkg", "diff", "diff/sigma", "weight", "weights",
     "sig", "sigma", "tick-pos", "tick pos", "axis-limits", "axis limits",
-    "excluded", "gof",
+    "excluded", "gof", "rw", "rwp", "rp", "rexp", "chi2",
 })
 # A reflection list is short: at most this share of the pattern's rows. A
 # column above the ceiling is reported and left undrawn, never dropped in
@@ -96,18 +99,30 @@ def residual_column(weighted=None):
     return "diff/sigma" if weighted else "diff"
 
 
+def fold(header):
+    """Header reduced to the characters that carry its meaning.
+
+    Case, the Greek theta and the punctuation exporters vary are dropped, so
+    '2 theta', '2-theta' and '2θ' become one key, and so do 'Rw', 'Rw%' and
+    'Rw / %'. Used for the angle header and for NON_PHASE_COLUMNS, which is
+    why one entry there covers a column's spellings.
+    """
+    text = header.lower().replace("θ", "theta")
+    for ch in " _-/%()":
+        text = text.replace(ch, "")
+    return text
+
+
 def is_theta_header(header):
     """True when a column header names the diffraction angle.
 
-    Exporters spell it several ways, so the header is folded before it is
-    matched: case, the Greek theta, and the spaces, underscores and hyphens
-    inside '2 theta' or 'two-theta'. A header whose first field is 'x' counts
-    as well, which covers both 'x' alone and 'x, 2theta (deg)'.
+    Matched on the folded header, so '2theta', '2 theta', 'two-theta' and
+    '2θ' all count. A header whose first field is 'x' counts as well, which
+    covers both 'x' alone and 'x, 2theta (deg)'.
     """
-    text = header.lower().replace("θ", "theta")
-    folded = text.replace(" ", "").replace("_", "").replace("-", "")
+    folded = fold(header)
     return ("2theta" in folded or "twotheta" in folded
-            or text.split(",")[0].strip() == "x")
+            or header.lower().split(",")[0].strip() == "x")
 
 
 def is_monotonic(values, tolerance=0.01):
@@ -283,12 +298,15 @@ def read_gsas2_csv(csv_path, weighted=None):
         # Per-phase reflection-position columns: whatever is left over and
         # sparse enough to be a reflection list rather than a data column.
         phase_cols = []
+        # Folded here, not at import, so a header added to NON_PHASE_COLUMNS
+        # on the module takes effect on the next call.
+        blocked = {fold(name) for name in NON_PHASE_COLUMNS}
         for cl, col in col_lower_map.items():
             # pandas renames a repeated header 'tick-pos' to 'tick-pos.1',
             # which the blocklist would otherwise miss.
             head, _, tail = cl.rpartition(".")
             base = head if head and tail.isdigit() else cl
-            if col == theta or base in NON_PHASE_COLUMNS:
+            if col == theta or fold(base) in blocked:
                 continue
             vals = clean(df[col])
             n_values = int(np.count_nonzero(~np.isnan(vals)))
