@@ -40,22 +40,32 @@ nearly empty. This takes a moment and catches an export that shifted a
 different way from the one described here. Save as CSV.
 
 Deleting the columns the figure never uses is safe and keeps the file
-readable, `used`, `diff`, `tick-pos` and `Axis-limits` among them. Two
-columns have to survive, the 2θ column and one residual column.
+readable, `diff`, `tick-pos` and `Axis-limits` among them. Two columns have
+to survive, the 2θ column and one residual column.
 
 The notebook refuses a file it still finds shifted, rather than drawing it:
 
 ```
-FAILED: the 'x, 2theta (deg)' column rises and falls, so it holds counts
-rather than angles and the header names do not line up with the columns
-they sit above. See docs/input-format.md
+FAILED: the 'x, 2theta (deg)' column does not run from one end of the scan
+to the other, so it holds something other than angles and the header names
+do not line up with the columns they sit above. See docs/input-format.md
 ```
 
-The test is the one property a 2θ axis always has and a column of counts
-never has: from the first row to the last it runs in one direction. A handful
-of repeated or out-of-order points is tolerated, an axis that turns hundreds
-of times is not. Nothing downstream recovers a shifted file, so the run stops
-on it and carries on with the others.
+Two properties a 2θ axis always has and a column of counts never has are
+checked. It runs one way from the first row to the last, measured by distance
+travelled, so a handful of repeated or out-of-order points is tolerated while
+a column that doubles back is not. And it lies inside 0 to 180 degrees, which
+catches a shift that lands a smooth column such as the background under the
+2θ header:
+
+```
+FAILED: the 'x, 2theta (deg)' column runs from 400 to 40, outside the 0 to
+180 degrees a 2theta axis occupies, so it holds something other than angles.
+See docs/input-format.md
+```
+
+Nothing downstream recovers a shifted file, so the run stops on it and
+carries on with the others.
 
 After the fix the export holds, in this order: `x, 2theta (deg)`, `obs`,
 `calc`, `bkg`, `diff`, then **one column per phase, labelled with the phase

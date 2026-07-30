@@ -42,7 +42,9 @@ version this is developed with.
 | Both variants | Both phase columns detected and trimmed independently |
 | The native export, 11 header names above 10 data fields | Refused, because the 2θ header sits above the counts, so the figure would look right and be wrong |
 | A 2θ axis running from 90° down to 10° | Still accepted: the guard rejects an axis that turns, not one that runs backwards |
-| An axis with one swapped pair, and a column of alternating counts | The glitch tolerated, the counts refused |
+| An axis with one swapped pair, and one with repeated points | Both accepted: neither travels backwards far enough to be anything but an axis |
+| A column of alternating counts, two scans pasted into one file, a column of one repeated value | All three refused, since the distance travelled backwards is not a rounding detail |
+| A smooth monotone column running 400 to 40 | Refused, outside the 0 to 180 degrees a 2θ axis occupies |
 | A file of arbitrary bytes | Isolated with a reason instead of raising |
 | A CSV with no 2θ column | Isolated as `2theta column not found` |
 | A CSV with only 2θ and `Obs` | Isolated as `residual column 'diff/sigma' not found` |

@@ -49,7 +49,7 @@ at step 3.
 5. **Open `XRD_Rietveld_Plotter.ipynb`** in VS Code, put your corrected `.csv`
    files in the `data/` folder beside it, and press *Run All*.
 
-5. *(Optional)* **Put `Samples_metadata.csv` beside the notebook**, not in
+6. *(Optional)* **Put `Samples_metadata.csv` beside the notebook**, not in
    `data/`, to print real sample names, phase fractions and phase colours in
    the legends. See [the metadata reference](docs/metadata.md).
 

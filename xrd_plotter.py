@@ -63,8 +63,12 @@ FONT_SIZE_TICK = 16
 NON_PHASE_COLUMNS = frozenset({
     "used", "obs", "calc", "bkg", "diff", "diff/sigma", "weight", "weights",
     "sig", "sigma", "tick-pos", "tick pos", "axis-limits", "axis limits",
-    "excluded", "gof", "rw", "rwp", "rp", "rexp", "chi2",
+    "excluded", "gof", "rw", "rwp", "rexp", "chi2",
 })
+# 'rp' is deliberately absent: GSAS-II writes Rwp, and 'RP' is how a
+# phase is labelled. Every entry is a name a phase could
+# carry, 'sigma' for the intermetallic among them, and a phase whose header
+# matches one is not drawn. The 'phases:' line each run prints is the check.
 # A reflection list is short: at most this share of the pattern's rows. A
 # column above the ceiling is reported and left undrawn, never dropped in
 # silence.
@@ -126,20 +130,27 @@ def is_theta_header(header):
 
 
 def is_monotonic(values, tolerance=0.01):
-    """True when the finite values only rise, or only fall, within tolerance.
+    """True when the finite values run one way from end to end.
 
-    A 2theta axis climbs (or, on some instruments, descends) from end to end.
-    An intensity column read under the 2theta header wanders, so roughly half
-    its steps go each way. The tolerance absorbs a handful of repeated or
-    out-of-order points without accepting a column of counts.
+    A 2theta axis climbs, or on some instruments descends, from the first row
+    to the last. An intensity column read under the 2theta header wanders.
+
+    The two are told apart by distance travelled, not by counting turns: a
+    column that scores one backward step out of five hundred passes either
+    way, but a single backward jump the width of the scan does not, and that
+    is what two exports pasted into one file looks like. Repeated points
+    travel nowhere and so count for neither direction, which leaves a column
+    of one repeated value with no distance at all: not an axis, and refused.
     """
     finite = values[~np.isnan(values)]
     if len(finite) < 3:
         return True  # too short to judge, the other checks still apply
     steps = np.diff(finite)
-    turns = min(int(np.count_nonzero(steps > 0)),
-                int(np.count_nonzero(steps < 0)))
-    return turns <= tolerance * len(steps)
+    rise = float(steps[steps > 0].sum())
+    fall = float(-steps[steps < 0].sum())
+    if rise + fall == 0.0:
+        return False  # a constant column, such as a mask of ones
+    return min(rise, fall) <= tolerance * (rise + fall)
 
 
 def plot_window(theta, x_min=None, x_max=None):
@@ -249,22 +260,40 @@ def read_gsas2_csv(csv_path, weighted=None):
 
         # 2theta column, across the spellings exporters use. Among the
         # candidates take the first one filled like a data column rather than
-        # like a reflection list, so a phase column never becomes the axis;
-        # fall back to the first, whose own emptiness is reported below.
+        # like a reflection list, so a phase column whose header happens to
+        # match never becomes the axis. Half is a property of an axis, not the
+        # PHASE_MAX_FILL knob, which the reader is free to move.
         candidates = [col for col in df.columns if is_theta_header(col)]
         if not candidates:
             return None, None, "2theta column not found"
         theta = next((c for c in candidates
                       if np.count_nonzero(~np.isnan(clean(df[c])))
-                      > PHASE_MAX_FILL * len(df)), candidates[0])
+                      > 0.5 * len(df)), candidates[0])
+        if len(candidates) > 1:
+            warnings.append(f"{len(candidates)} columns could be the 2theta "
+                            f"axis ({', '.join(candidates)}), '{theta}' used")
         data["x"] = clean(df[theta])
         if np.all(np.isnan(data["x"])):
             return None, None, "no valid data in 2theta column"
+        n_nan = int(np.isnan(data["x"]).sum())
+        if n_nan:
+            warnings.append(f"column '{theta}': {n_nan} non-numeric values "
+                            "-> NaN, those points are not drawn")
         if not is_monotonic(data["x"]):
             return None, None, (
-                f"the '{theta}' column rises and falls, so it holds counts "
-                "rather than angles and the header names do not line up with "
-                "the columns they sit above. See docs/input-format.md")
+                f"the '{theta}' column does not run from one end of the scan "
+                "to the other, so it holds something other than angles and "
+                "the header names do not line up with the columns they sit "
+                "above. See docs/input-format.md")
+        # Degrees, so the axis lives inside 0 to 180. A shift can land a
+        # smooth monotone column such as the background under the 2theta
+        # header, which the test above cannot see but this one can.
+        low, high = float(np.nanmin(data["x"])), float(np.nanmax(data["x"]))
+        if low < 0.0 or high > 180.0:
+            return None, None, (
+                f"the '{theta}' column runs from {low:g} to {high:g}, outside "
+                "the 0 to 180 degrees a 2theta axis occupies, so it holds "
+                "something other than angles. See docs/input-format.md")
 
         # Main pattern columns, in the fixed GSAS-II layout.
         missing = []

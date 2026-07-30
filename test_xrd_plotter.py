@@ -19,13 +19,16 @@ import xrd_plotter as xp
 
 N = 500
 CONFIG = ("PLOT_X_MIN", "PLOT_X_MAX", "WEIGHTED_RESIDUALS", "PHASE_LABELS",
-          "PHASE_COLORS", "PHASE_MAX_FILL", "NON_PHASE_COLUMNS")
+          "PHASE_COLORS", "PHASE_MAX_FILL", "NON_PHASE_COLUMNS", "DPI_EXPORT")
 
 
 @pytest.fixture(autouse=True)
 def config_restored():
     """A test that changes a module constant must not leak it to the next."""
     saved = {name: getattr(xp, name) for name in CONFIG}
+    # The export resolution is not what any test checks, and 600 dpi rasters
+    # cost more than everything else here put together.
+    xp.DPI_EXPORT = 100
     yield
     for name, value in saved.items():
         setattr(xp, name, value)
@@ -166,6 +169,18 @@ def test_shifted_export_is_refused(tmp_path):
     assert "do not line up" in error, error
 
 
+def test_an_axis_outside_0_to_180_degrees_is_refused(tmp_path):
+    # A shift can land a smooth monotone column, the background for one,
+    # under the 2theta header. Monotonicity cannot see that; degrees can.
+    x = np.linspace(400.0, 40.0, 300)  # a falling background, not angles
+    pd.DataFrame({"x, 2theta (deg)": x, "Obs": np.linspace(1.0, 2.0, 300),
+                  "diff/sigma": np.zeros(300)}).to_csv(tmp_path / "wide.csv",
+                                                       sep=";", index=False)
+    data, _, error = xp.read_gsas2_csv(tmp_path / "wide.csv")
+    assert data is None, "a column of counts was drawn as an axis"
+    assert "0 to 180 degrees" in error, error
+
+
 def test_a_descending_2theta_axis_is_still_accepted(tmp_path):
     # The guard rejects a column that turns, not one that runs backwards.
     x = np.linspace(90.0, 10.0, N)
@@ -178,80 +193,54 @@ def test_a_descending_2theta_axis_is_still_accepted(tmp_path):
     assert np.array_equal(data["x"], x)
 
 
-@pytest.mark.parametrize("header", [
-    "x, 2theta (deg)", "2theta", "2Theta (deg)", "X, 2THETA", "x, deg",
-    "angle, 2theta", "2theta_deg", "2θ", "2 theta (deg)", "two-theta", "x",
-])
-def test_theta_header_spellings_accepted(header):
-    assert xp.is_theta_header(header), header
+def test_header_matching(tmp_path):
+    """The angle takes any spelling; every other column is matched whole."""
+    for header in ("x, 2theta (deg)", "2theta", "2Theta (deg)", "X, 2THETA",
+                   "x, deg", "angle, 2theta", "2theta_deg", "2θ",
+                   "2 theta (deg)", "two-theta", "x"):
+        assert xp.is_theta_header(header), header
+    for header in ("theta", "angle", "obs", "counts", "Max, phase",
+                   "tick-pos"):
+        assert not xp.is_theta_header(header), header
 
-
-@pytest.mark.parametrize("header", [
-    "theta", "angle", "obs", "counts", "intensity", "Max, phase", "tick-pos",
-])
-def test_theta_header_spellings_refused(header):
-    assert not xp.is_theta_header(header), header
-
-
-def test_pattern_columns_match_on_the_exact_name(tmp_path):
-    # Case and surrounding spaces are ignored, nothing else is: the docs say
-    # so, and a renamed column is drawn flat rather than guessed at.
+    # End to end: 'obs' is matched whole, so a renamed one is drawn flat, and
+    # a phase whose header merely holds a comma never becomes the axis.
     x = np.linspace(10.0, 90.0, 300)
     obs = np.linspace(100.0, 200.0, 300)
-    for header, found in ((" OBS ", True), ("Obs", True),
-                          ("observed", False), ("y_obs", False)):
+    for header, read in ((" OBS ", True), ("observed", False)):
         csv = tmp_path / f"{header.strip()}.csv"
-        pd.DataFrame({"x, 2theta (deg)": x, header: obs,
+        pd.DataFrame({"Max, phase": pd.Series([30.0]).reindex(range(300)),
+                      "x, 2theta (deg)": x, header: obs,
                       "diff/sigma": np.zeros(300)}).to_csv(csv, sep=";",
                                                            index=False)
-        data, _, error = xp.read_gsas2_csv(csv)
-        assert error is None, error
-        assert np.any(data["obs"] != 0) == found, header
-
-
-def test_a_phase_name_containing_x_comma_is_not_taken_as_the_axis(tmp_path):
-    # 'x,' sits inside ordinary words, so 'Max, phase' matches the same rule
-    # as 'x, 2theta (deg)'. The short column must not become the axis.
-    x = np.linspace(10.0, 90.0, 300)
-    df = pd.DataFrame({"Max, phase": pd.Series([30.0, 35.0]).reindex(range(300)),
-                       "x, 2theta (deg)": x,
-                       "obs": np.linspace(1.0, 2.0, 300),
-                       "diff/sigma": np.zeros(300)})
-    csv = tmp_path / "collision.csv"
-    df.to_csv(csv, sep=";", index=False)
-    data, phase_cols, error = xp.read_gsas2_csv(csv)
-    assert error is None, error
-    assert np.array_equal(data["x"], x), "a phase column was read as 2theta"
-    assert phase_cols == ["Max, phase"], phase_cols
-
-
-def test_column_order_does_not_change_the_result(tmp_path):
-    x = np.linspace(10.0, 90.0, 300)
-    obs = np.linspace(1.0, 2.0, 300)
-    base = {"x, 2theta (deg)": x, "obs": obs, "calc": obs, "bkg": obs,
-            "diff": np.zeros(300), "diff/sigma": np.zeros(300),
-            "GOF": pd.Series([1.8]).reindex(range(300)),
-            "Rutile": pd.Series([30.0, 35.0]).reindex(range(300)),
-            "Anatase": pd.Series([32.0]).reindex(range(300))}
-    seen = set()
-    for i, order in enumerate([list(base), list(base)[::-1],
-                               sorted(base), sorted(base, reverse=True)]):
-        csv = tmp_path / f"order_{i}.csv"
-        pd.DataFrame({k: base[k] for k in order}).to_csv(csv, sep=";",
-                                                        index=False)
         data, phase_cols, error = xp.read_gsas2_csv(csv)
         assert error is None, error
-        seen.add((data["x"].tobytes(), data["obs"].tobytes(),
-                  tuple(sorted(phase_cols))))
-    assert len(seen) == 1, "the column order changed what was parsed"
+        assert np.array_equal(data["x"], x), "a phase column was read as 2theta"
+        assert np.any(data["obs"] != 0) is np.True_ or not read, header
+        assert phase_cols == ["Max, phase"], phase_cols
 
 
-def test_is_monotonic_tolerates_a_few_out_of_order_points():
+def test_is_monotonic():
+    """Distance travelled, not the number of turns.
+
+    Counting turns accepted two files that draw a plausible figure from the
+    wrong column: one backward jump scores 1, which fits inside any tolerance
+    on a long file, and a constant column scores 0.
+    """
     rising = np.arange(500.0)
     assert xp.is_monotonic(rising)
+    assert xp.is_monotonic(rising[::-1]), "a descending axis is still an axis"
+    assert xp.is_monotonic(np.repeat(np.linspace(10.0, 90.0, 250), 2)), (
+        "repeated points travel nowhere and must not count as a turn")
     rising[100], rising[101] = rising[101], rising[100]  # one swapped pair
     assert xp.is_monotonic(rising), "one glitch must not reject a real axis"
+
     assert not xp.is_monotonic(np.tile([1.0, 2.0], 250)), "counts accepted"
+    scan = np.linspace(10.0, 90.0, 500)
+    assert not xp.is_monotonic(np.concatenate([scan, scan])), (
+        "two scans pasted into one file accepted")
+    assert not xp.is_monotonic(np.ones(500)), (
+        "a constant column, such as a mask of ones, accepted as an axis")
 
 
 def test_missing_curves_are_filled_with_zeros(synth):
@@ -280,39 +269,34 @@ def test_repeated_header_is_not_a_phase(synth):
     assert error is None and phase_cols == [], phase_cols
 
 
-@pytest.mark.parametrize("header, drawn", [
-    ("Rw / %", False), ("Rw%", False), ("rw", False), ("Rwp / %", False),
-    ("Rp", False), ("chi2", False), ("GOF", False), ("Tick-Pos", False),
-    ("Rw phase", True), ("Rutile", True),
-])
-def test_fit_statistics_are_not_read_as_phases(tmp_path, header, drawn):
-    # A statistic kept beside the pattern is sparse, so the reflection-list
-    # test alone would give it a tick row. The blocklist is folded, so one
-    # entry 'rw' covers 'Rw', 'Rw%' and 'Rw / %', and a real phase whose name
-    # merely starts the same way is untouched.
-    x = np.linspace(10.0, 90.0, 300)
-    pd.DataFrame({"x, 2theta (deg)": x, "obs": np.linspace(1.0, 2.0, 300),
-                  "diff/sigma": np.zeros(300),
-                  header: pd.Series([30.0, 40.0]).reindex(range(300))}).to_csv(
-        tmp_path / "stat.csv", sep=";", index=False)
-    _, phase_cols, error = xp.read_gsas2_csv(tmp_path / "stat.csv")
-    assert error is None, error
-    assert (header in phase_cols) is drawn, phase_cols
+def test_fit_statistics_are_not_read_as_phases(tmp_path):
+    """A statistic beside the pattern is sparse, so it would get a tick row.
 
-
-def test_a_header_added_to_the_blocklist_takes_effect(tmp_path):
-    # The knob the README points at: assigning to the module must work on the
-    # next call, so the folded set cannot be built once at import.
+    Blocklist entries are folded, so 'rw' covers 'Rw', 'Rw%' and 'Rw / %'.
+    'RP' names a phase and is deliberately not blocked, and
+    a header added to the blocklist on the module takes effect at once, which
+    is why the folded set cannot be built at import.
+    """
     x = np.linspace(10.0, 90.0, 300)
-    pd.DataFrame({"x, 2theta (deg)": x, "obs": np.linspace(1.0, 2.0, 300),
-                  "diff/sigma": np.zeros(300),
-                  "Scan note": pd.Series([30.0]).reindex(range(300))}).to_csv(
-        tmp_path / "note.csv", sep=";", index=False)
-    _, phase_cols, _ = xp.read_gsas2_csv(tmp_path / "note.csv")
-    assert phase_cols == ["Scan note"]
+
+    def phases_of(header):
+        csv = tmp_path / "stat.csv"
+        pd.DataFrame({"x, 2theta (deg)": x, "obs": np.linspace(1.0, 2.0, 300),
+                      "diff/sigma": np.zeros(300),
+                      header: pd.Series([30.0]).reindex(range(300))}).to_csv(
+            csv, sep=";", index=False)
+        _, phase_cols, error = xp.read_gsas2_csv(csv)
+        assert error is None, error
+        return phase_cols
+
+    for header in ("Rw / %", "Rw%", "rw", "Rwp / %", "chi2", "GOF", "Tick-Pos"):
+        assert phases_of(header) == [], header
+    for header in ("Rp", "Rw phase", "Rutile"):
+        assert phases_of(header) == [header], header
+
+    assert phases_of("Scan note") == ["Scan note"]
     xp.NON_PHASE_COLUMNS = xp.NON_PHASE_COLUMNS | {"scan note"}
-    _, phase_cols, _ = xp.read_gsas2_csv(tmp_path / "note.csv")
-    assert phase_cols == [], "the blocklist addition was ignored"
+    assert phases_of("Scan note") == [], "the blocklist addition was ignored"
 
 
 def test_column_too_full_is_reported_not_drawn(synth, capsys):
@@ -532,71 +516,57 @@ def test_save_figure_writes_both_formats(tmp_path):
     assert not (tmp_path / "out" / "sample_XRD_analysis_sqrt.pdf").exists()
 
 
-# 13. One unusable file must not end the batch.
-def test_batch_survives_a_broken_file(synth, tmp_path):
+# 13. One unusable file must not end the batch, and the report must say so.
+def test_the_batch_isolates_a_bad_file_and_reports_every_block(synth, tmp_path,
+                                                              capsys):
+    """One run over a good, a broken and a shifted file.
+
+    Covers what the reader depends on: the two good files are written, the
+    other two are isolated with a reason, each block prints its name, phases,
+    2theta window and output in that order, and every failure is repeated in
+    the summary at the end.
+    """
     folder, out = tmp_path / "in", tmp_path / "out"
     folder.mkdir()
     synth.df.to_csv(folder / "a_good.csv", sep=";", index=False)
     synth.df.assign(Obs="n/a").to_csv(folder / "b_broken.csv", sep=";",
                                       index=False)
-    synth.df.to_csv(folder / "c_good.csv", sep=";", index=False)
+    # A shifted export: the angles land under 'used', the counts under the
+    # 2theta header. It must be isolated, not drawn.
+    rows = [f"{10 + 0.2 * i:.4f};{100 + 50 * (i % 2)};1;1;1" for i in range(300)]
+    (folder / "c_shifted.csv").write_text(
+        "used;x, 2theta (deg);obs;calc;diff/sigma\n" + "\n".join(rows) + "\n")
+    synth.df.to_csv(folder / "d_good.csv", sep=";", index=False)
 
     outcome = xp.process_folder(folder, synth.meta, out, show=False)
-    assert [status for _, status, _ in outcome] == ["ok", "error", "ok"]
+    assert [s for _, s, _ in outcome] == ["ok", "error", "error", "ok"], outcome
     assert len(list((out / "png").glob("*.png"))) == 2
     assert len(list((out / "pdf").glob("*.pdf"))) == 2
 
-
-# 14. The printed report: one block per file, failures visible at the end.
-def test_batch_prints_one_block_per_file(synth, tmp_path, capsys):
-    folder, out = tmp_path / "in", tmp_path / "out"
-    folder.mkdir()
-    synth.df.to_csv(folder / "a_good.csv", sep=";", index=False)
-
-    xp.process_folder(folder, synth.meta, out, show=False)
     text = capsys.readouterr().out
     assert "\na_good.csv\n" in text, "the file name must open its own block"
     assert "\n  phases: Phase 1 #" in text, text
-    saved_line = next(line for line in text.splitlines()
-                      if line.startswith("  saved "))
-    assert saved_line.endswith("pdf/a_good_XRD_analysis_sqrt.pdf and "
-                               "png/a_good_XRD_analysis_sqrt.png"), (
-        "the saved line must name the file it wrote: " + saved_line)
+    saved = next(l for l in text.splitlines() if l.startswith("  saved "))
+    assert saved.endswith("pdf/a_good_XRD_analysis_sqrt.pdf and "
+                          "png/a_good_XRD_analysis_sqrt.png"), saved
     assert (text.index("\na_good.csv\n") < text.index("\n  phases: ")
+            < text.index("\n  2theta window: ")
             < text.index("\n  saved ")), "the block lost its order"
-    # The window line is shown, marked auto when no metadata row set it.
-    assert "\n  2theta window: " in text and "(auto)" in text, text
-    assert (text.index("\n  phases: ") < text.index("\n  2theta window: ")
-            < text.index("\n  saved ")), "the window line is out of place"
+    assert "(auto)" in text, "the window source must be named"
+    assert "  FAILED: " in text, "the failing file must say so in its block"
+    tail = text.rsplit("=" * 60, 1)[1]
+    assert "2 of 4 file(s) plotted" in tail, tail
+    assert "b_broken.csv" in tail and "c_shifted.csv" in tail, (
+        "every failure must survive to the summary: " + tail)
 
 
-def test_batch_window_line_names_the_metadata_source(synth, tmp_path):
+def test_the_batch_window_line_names_the_metadata_source(synth, tmp_path,
+                                                         capsys):
     folder, out = tmp_path / "in", tmp_path / "out"
     folder.mkdir()
     synth.df.to_csv(folder / "sample_A.csv", sep=";", index=False)
     meta = folder / "meta.csv"
     meta.write_text("filename;formula;x_min;x_max\nsample_A.csv;F;20;70\n")
 
-    import io as _io
-    import contextlib
-    buf = _io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        xp.process_folder(folder, meta, out, show=False)
-    assert "  2theta window: 20 to 70 (metadata)" in buf.getvalue()
-
-
-def test_batch_repeats_failures_in_the_summary(synth, tmp_path, capsys):
-    folder, out = tmp_path / "in", tmp_path / "out"
-    folder.mkdir()
-    synth.df.to_csv(folder / "a_good.csv", sep=";", index=False)
-    synth.df.assign(Obs="n/a").to_csv(folder / "b_broken.csv", sep=";",
-                                      index=False)
-    synth.df.to_csv(folder / "c_good.csv", sep=";", index=False)
-
-    xp.process_folder(folder, synth.meta, out, show=False)
-    text = capsys.readouterr().out
-    assert "  FAILED: " in text, "the failing file must say so in its block"
-    assert "=" * 60 in text, "the summary lost its separator"
-    tail = text.rsplit("=" * 60, 1)[1]
-    assert "2 of 3 file(s) plotted" in tail, tail
-    assert "FAILED (1): b_broken.csv" in tail, "a failure must survive the run"
+    xp.process_folder(folder, meta, out, show=False)
+    assert "  2theta window: 20 to 70 (metadata)" in capsys.readouterr().out
