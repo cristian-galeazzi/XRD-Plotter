@@ -12,12 +12,12 @@ press run. One run processes the whole folder.
 
 | `USE_SQRT = True`, `WEIGHTED_RESIDUALS = True` | `USE_SQRT = False`, `WEIGHTED_RESIDUALS = False` |
 |---|---|
-| ![Two-panel Rietveld figure on a square-root intensity axis: black observed points, red calculated fit, grey dashed background, one row of coloured reflection ticks per phase, and a lower panel of weighted residuals.](docs/example_sqrt.png) | ![The same pattern on a linear intensity axis, with the raw difference in counts in the lower panel, where the strongest reflection dominates both panels.](docs/example_counts.png) |
+| ![Two-panel Rietveld figure on a square-root intensity axis: black observed points, red calculated fit, grey dashed background, one row of coloured reflection ticks per phase, and a lower panel of weighted residuals.](docs/example_sqrt.png) | ![The same pattern on a linear intensity axis, with the raw difference in the lower panel, where the strongest reflection dominates both panels.](docs/example_counts.png) |
 
 Same pattern, the two settings that change what you see. The square root
 keeps the weak reflections visible and `diff/sigma` holds the residuals in a
-band a few units wide. The linear axis and the raw difference show the counts
-as they are, with the strongest reflection dominating both panels.
+band a few units wide. The linear axis and the raw difference show the
+intensity as it is, with the strongest reflection dominating both panels.
 
 Both figures come from an invented pattern with two phases named `Phase 1`
 and `Phase 2`, drawn by [`docs/make_examples.py`](docs/make_examples.py), so
@@ -91,10 +91,13 @@ one row of coloured ticks per phase at its reflection positions, and a lower
 panel with the residuals against a zero line. The legend names the sample and
 the phase fractions.
 
-The intensity axis carries no numbers. Counts in a diffractogram are
-arbitrary units. An axis of tick labels invites the reader to compare values
-across measurements where no comparison holds, and the space works harder for
-the pattern.
+Neither y axis carries numbers nor tick marks. Intensity in a diffractogram is
+an arbitrary unit, and an axis of tick labels invites the reader to compare
+heights across measurements where no comparison holds. The residual panel
+follows the same rule, so its zero line is the reference and the panel shows
+the shape of the misfit rather than its size. The 2θ axis keeps its numbers,
+drawn once under the lower panel. Axis labels read as `quantity / unit`, the
+IUPAC form, so no parentheses appear around `a.u.` or `°`.
 
 ## Settings
 

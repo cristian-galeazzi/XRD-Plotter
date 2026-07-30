@@ -426,19 +426,25 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
                        lw=LINEWIDTH_TICKS, zorder=4)
             rows += 1
 
-    ylabel = r"$\sqrt{Counts}$ / (a.u.)" if use_sqrt else r"Counts / (a.u.)"
+    # 'quantity / unit' per IUPAC: the slash divides by the unit, so the axis
+    # would carry pure numbers. Parentheses are needed only for a compound
+    # unit, where 'I / counts s^-1' would read as (I/counts)*s^-1.
+    ylabel = (r"$\sqrt{Intensity}$ / a.u." if use_sqrt
+              else r"Intensity / a.u.")
     ax1.set_ylabel(ylabel, fontsize=FONT_SIZE_LABEL, labelpad=10)
-    ax1.set_yticklabels([])
-    ax1.tick_params(axis="y", length=0)
-    ax1.tick_params(direction="in", top=False, right=False, left=True,
-                    width=1.5, length=6, labelsize=FONT_SIZE_TICK)
+    # No tick marks and no numbers on either intensity axis: labelleft does
+    # both ends of that in one call, and unlike set_yticklabels([]) it does
+    # not depend on a later tick_params resetting the tick length.
+    ax1.tick_params(direction="in", top=False, right=False, left=False,
+                    labelleft=False, width=1.5, length=6,
+                    labelsize=FONT_SIZE_TICK)
     for spine in ax1.spines.values():
         spine.set_linewidth(LINEWIDTH_BORDER)
     ax1.spines["bottom"].set_visible(False)
     ax1.tick_params(bottom=False)
     # Default limits leave room for the tick rows below and a margin above;
     # both ends can be given explicitly, in the units actually drawn (sqrt
-    # counts when USE_SQRT).
+    # intensity when USE_SQRT).
     y_low, y_high = ylim
     ax1.set_ylim(bottom=(base_y - (max(rows, 1) - 0.5) * step_y
                          if y_low is None else float(y_low)),
@@ -472,12 +478,15 @@ def create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
 
     ax2.plot(theta, resid, color=COLOR_RESIDUALS, lw=LINEWIDTH_RESIDUALS)
     ax2.axhline(0, color="black", lw=1.5)
-    ax2.set_xlabel(r"2$\theta$ / ($^\circ$)", fontsize=FONT_SIZE_LABEL)
+    ax2.set_xlabel(r"2$\theta$ / $^\circ$", fontsize=FONT_SIZE_LABEL)
     ax2.set_ylabel(r"diff/$\sigma$" if residual_column(weighted) == "diff/sigma"
-                   else r"diff / (a.u.)", fontsize=FONT_SIZE_LABEL)
+                   else r"diff / a.u.", fontsize=FONT_SIZE_LABEL)
     ax2.set_xlim(x_low, x_high)
-    ax2.tick_params(direction="in", right=False, left=True, bottom=True,
-                    width=1.5, length=6, labelsize=FONT_SIZE_TICK)
+    # The residual axis loses its numbers too, so the zero line is the only
+    # reference left: the panel shows the shape of the misfit, not its size.
+    ax2.tick_params(direction="in", right=False, left=False, labelleft=False,
+                    bottom=True, width=1.5, length=6,
+                    labelsize=FONT_SIZE_TICK)
     for spine in ax2.spines.values():
         spine.set_linewidth(LINEWIDTH_BORDER)
     ax2.spines["top"].set_visible(False)

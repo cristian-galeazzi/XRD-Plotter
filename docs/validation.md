@@ -56,6 +56,8 @@ version this is developed with.
 | `PHASE_LABELS` and `PHASE_COLORS` set together | The renamed phase prints its new name and keeps the colour keyed to it |
 | Metadata with a decimal comma, an empty `formula`, an unmatched `_pct` column, two columns matching one phase | 60,5 read as 60.5, the file name used as the legend name, both mismatches reported, no percentage guessed |
 | The window unset, then the constants, then `x_min`/`x_max` in the metadata | Each overrides the one before, with the intensity axis rescaled to the window |
+| Both intensity labels and the 2θ label | `Intensity / a.u.`, `√Intensity / a.u.` and `2θ / °`, the IUPAC `quantity / unit` form with no parentheses |
+| The ticks of the finished figure | Neither y axis numbered nor marked, the 2θ numbers and marks drawn once, under the lower panel |
 | The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
 | The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
 | The section 4 save reusing the batch name and writer | `_sqrt`, `_linear` and the `_counts` suffix chosen from the toggles, both files written under that name |

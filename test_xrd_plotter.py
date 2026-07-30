@@ -301,6 +301,31 @@ def test_top_margin_clears_a_calc_peak_above_the_obs(tmp_path):
     plt.close(fig)
 
 
+# 10b. Only the 2theta axis is numbered.
+@pytest.mark.parametrize("use_sqrt, ylabel", [
+    (True, r"$\sqrt{Intensity}$ / a.u."),
+    (False, r"Intensity / a.u."),
+])
+def test_axis_labels_carry_no_parentheses(drawn, use_sqrt, ylabel):
+    fig = xp.create_plot(*drawn.args, drawn.name, drawn.pct, use_sqrt=use_sqrt)
+    assert fig.axes[0].get_ylabel() == ylabel
+    assert fig.axes[1].get_xlabel() == r"2$\theta$ / $^\circ$"
+
+
+def test_neither_intensity_axis_is_ticked_or_numbered(drawn):
+    fig = xp.create_plot(*drawn.args, drawn.name, drawn.pct)
+    upper, lower = fig.axes
+    fig.canvas.draw()  # ticks are laid out lazily
+    for ax, panel in ((upper, "upper"), (lower, "residual")):
+        assert ax.get_yticklabels() == [], f"the {panel} panel kept its numbers"
+        assert not any(t.get_visible() for t in ax.yaxis.get_ticklines()), (
+            f"the {panel} panel kept its y tick marks")
+    # The 2theta axis keeps both, and only the lower panel draws them.
+    assert [t.get_text() for t in lower.get_xticklabels()], "2theta lost its numbers"
+    assert any(t.get_visible() for t in lower.xaxis.get_ticklines())
+    assert upper.get_xticklabels() == [], "the upper panel repeated the 2theta numbers"
+
+
 # 11. The unweighted panel.
 def test_unweighted_residuals(synth, drawn):
     data, phase_cols, error = xp.read_gsas2_csv(synth.full, weighted=False)
@@ -308,7 +333,7 @@ def test_unweighted_residuals(synth, drawn):
     assert np.array_equal(data["resid"], synth.obs - synth.calc), "not exact"
     fig = xp.create_plot(*xp.prepare_data(data, phase_cols), drawn.name,
                          drawn.pct, weighted=False)
-    assert fig.axes[1].get_ylabel() == r"diff / (a.u.)"
+    assert fig.axes[1].get_ylabel() == r"diff / a.u."
 
     _, _, error = xp.read_gsas2_csv(synth.a, weighted=False)
     assert error == "residual column 'diff' not found", error
@@ -324,7 +349,7 @@ def test_replot_file(synth):
     assert line.splitlines()[1] == "sample_A.csv;Sample A (synthetic);20;60.5"
 
     fig, _ = xp.replot_file(synth.full, synth.meta, weighted=False)
-    assert fig.axes[1].get_ylabel() == r"diff / (a.u.)"
+    assert fig.axes[1].get_ylabel() == r"diff / a.u."
     assert xp.WEIGHTED_RESIDUALS is True, "the constant must not be mutated"
 
     with pytest.raises(ValueError, match="residual column"):
