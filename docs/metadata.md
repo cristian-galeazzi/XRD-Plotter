@@ -87,6 +87,9 @@ its colour under the new name. Both dictionaries ship empty.
 - Two columns matching one phase print no percentage and say so, rather than
   picking one.
 - A column matching no phase in a file is reported for that file.
+- A file with no `filename` or `file` column, or one with no header row at
+  all, is reported and ignored whole. Every sample then falls back to its file
+  name, and the batch still runs.
 - Without this file, or for a data file with no row in it, the legend falls
   back to the file name and the phase entries carry no percentage.
 - Duplicate rows for one file are dropped after the first.
@@ -96,14 +99,19 @@ its colour under the new name. Both dictionaries ship empty.
 Section 4 of the notebook draws one file at a time. Pick it from the
 dropdown, type the 2θ and intensity limits, tick or untick the sqrt intensity
 and the `diff/sigma` panel. Picking a file fills the 2θ boxes from its row
-here, so it opens on the window section 3 draws, and clearing a box widens
-back to the measured range. The figure redraws on every change, a text box
-when you press Enter or leave it, a checkbox and the dropdown at once, and
+here, so it opens on the window section 3 draws. The figure redraws on every
+change, a text box when you press Enter or leave it, a checkbox and the
+dropdown at once.
+
+Clear a 2θ box and that end of the axis falls back to the `xp.PLOT_X_MIN` and
+`xp.PLOT_X_MAX` constants, which is the full measured range while they are
+`None`. An empty intensity box leaves that end to the data.
+
 **Save to output** writes the window on screen to `output/`, at full
-resolution, under the same name section 3 uses. An empty box leaves that end
-of the axis to the setting behind it, the `xp.PLOT_X_MIN` and `xp.PLOT_X_MAX`
-constants for 2θ and the data itself for the intensity. Every control other
-than that button previews only.
+resolution, under the name section 3 uses for that file. The two checkboxes
+are part of that name: untick one and the figure is written as `_linear` or
+`_unweighted`, so a preview never overwrites a batch figure. Every control
+other than that button previews only.
 
 Above the figure the panel prints the row for the window you landed on:
 

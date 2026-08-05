@@ -13,10 +13,11 @@
 
   > [!WARNING]
   > Save it from a plot on a linear intensity axis. `obs` is copied from the
-  > data, but `calc`, `bkg` and `diff` are copied from the drawn lines, so a
-  > square-root plot exports the square roots of those three beside an
-  > untouched `obs`. Nothing in the file marks it, and the symptom is a
-  > calculated curve drawn far below the observed one.
+  > data, but `calc` and `bkg` are copied from the drawn lines, so a
+  > square-root plot exports the square roots of those two beside an untouched
+  > `obs`. Nothing in the file marks it, and the symptom is a calculated curve
+  > drawn far below the observed one. (`diff` is spoiled the same way, and is
+  > the one column this notebook never reads.)
 
 - **Not this.** *Export → Powder data as → histogram CSV file* writes a block
   of quoted `"Histogram"`, `"Instparm: …"` and `"Samparm: …"` lines above the
@@ -194,12 +195,11 @@ and the `diff` column is ignored wherever it appears. GSAS-II copies that
 column off the plotted difference curve, which the plot holds below the
 pattern so the two do not overlap: 2% of the largest observed intensity by
 default, any value at all once you drag the curve, and the difference of the
-square roots in a square-root plot. The same shift sits on every point of
-the column, while `diff/sigma` carries
-none of it, because GSAS-II recomputes that one from the data rather than
-reading it off the plot. Drawing `diff` would put the trace off the zero the
-panel holds at its middle. That mode needs `obs` and `calc` instead, and says
-so when one of them is absent:
+square roots in a square-root plot. The same shift sits on every point of the
+column. `diff/sigma` carries none of it, because GSAS-II recomputes that one
+from the data rather than reading it off the plot. Drawing `diff` would put
+the trace off the zero the panel holds at its middle. That mode needs `obs`
+and `calc` instead, and says so when one of them is absent:
 
 ```
 FAILED: the raw residual is computed as obs - calc, and the 'calc' column

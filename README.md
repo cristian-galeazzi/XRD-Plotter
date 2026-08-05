@@ -15,9 +15,10 @@ press run. One run processes the whole folder.
 | ![Two-panel Rietveld figure on a square-root intensity axis: black observed points, red calculated fit, grey dashed background, one row of coloured reflection ticks per phase, and a lower panel of weighted residuals.](docs/example_sqrt.png) | ![The same pattern on a linear intensity axis, with the raw difference in the lower panel, where the strongest reflection dominates both panels.](docs/example_linear.png) |
 
 Same pattern, the two settings that change what you see. The square root
-keeps the weak reflections visible and `diff/sigma` holds the residuals in a
-band a few units wide. The linear axis and the raw difference show the
-intensity as it is, with the strongest reflection dominating both panels.
+keeps the weak reflections visible, and `diff/sigma`, each residual divided by
+the uncertainty of its own point, holds the lower panel in a band a few units
+wide. The linear axis and the raw difference show the intensity as it is, with
+the strongest reflection dominating both panels.
 
 Both figures come from an invented pattern with two phases named `Phase 1`
 and `Phase 2`, drawn by [`docs/make_examples.py`](docs/make_examples.py), so
@@ -41,22 +42,33 @@ at step 3.
 3. **Download this repository.** Use the green *Code* button above, then
    *Download ZIP*, then unzip it somewhere you find again.
 
-4. **Check the header of each export once.** GSAS-II usually writes one header
-   name too many, so the names sit one column left of their data, but not
-   always. Read the first cell of the first data row: `1` or `0` means the
-   file is aligned and needs nothing, your lowest 2θ means it is shifted, and
-   then you delete the `used` cell of the header row in a spreadsheet and
-   shift that row one place left.
+4. **Export each refined pattern from GSAS-II.** On the refined powder
+   pattern, open the publication-plot dialog and *Save* it with `csv` as the
+   format, from a plot on a **linear** intensity axis. One CSV per sample.
+   *Export → Powder data as* writes a different file, which is rejected.
+
+5. **Check the header of each export once.** GSAS-II usually writes one header
+   name too many, so every name sits one column left of its own data, but not
+   always. Open the file in a spreadsheet and read the first cell of the first
+   data row:
+
+   | The first cell reads | The file is | Do this |
+   |---|---|---|
+   | `1` or `0` | aligned | Nothing, save it as it is |
+   | your lowest 2θ | shifted | Delete the `used` cell of the header row, shift the rest of that row one place left, save as CSV |
+
+   Do not make that edit to an aligned file, which would create the shift.
    Details in [the input format reference](docs/input-format.md).
 
-5. **Open `XRD_Rietveld_Plotter.ipynb`** in VS Code, put your corrected `.csv`
+6. **Open `XRD_Rietveld_Plotter.ipynb`** in VS Code, put your checked `.csv`
    files in the `data/` folder beside it, and press *Run All*.
 
-6. *(Optional)* **Put `Samples_metadata.csv` beside the notebook**, not in
+7. *(Optional)* **Put `Samples_metadata.csv` beside the notebook**, not in
    `data/`, to print real sample names, phase fractions and phase colours in
    the legends. See [the metadata reference](docs/metadata.md).
 
-You end up with this. You add files to `data/` only:
+You end up with this. Your own files go in two places: the exports in `data/`,
+the optional metadata file beside the notebook.
 
 ```
 XRD_Rietveld_Plotter.ipynb   <- the four sections you run
@@ -101,17 +113,21 @@ refined pattern as a red line, the refined background as a grey dashed line,
 one row of coloured ticks per phase at its reflection positions, and a lower
 panel with the residuals. The legend names the sample and the phase fractions.
 
-Neither y axis carries numbers nor tick marks. Intensity in a diffractogram is
-an arbitrary unit, and an axis of tick labels invites the reader to compare
-heights across measurements where no comparison holds. The residual panel
-follows the same rule and carries no line at zero either. Zero is held at the
-middle of that panel by limits symmetric about it, and the weighted panel is
-never narrower than `RESIDUAL_SPAN` standard deviations, so every well-fitted
-sample is drawn on one residual scale and two figures can be read side by
-side. A fit that misses widens the panel rather than being clipped. The 2θ
-axis keeps its numbers, drawn once under the lower panel. Axis labels read as
-`quantity / unit`, the IUPAC form, so no parentheses appear around `a.u.` or
-`°`. Text is set in a serif face with STIX maths, to sit in a typeset document
+Three things about it are deliberate:
+
+- **Neither intensity axis carries numbers or tick marks.** Intensity in a
+  diffractogram is an arbitrary unit, and an axis of tick labels invites the
+  reader to compare heights across measurements where no comparison holds.
+- **The residual panel has no line at zero.** Zero is held at the middle by
+  limits symmetric about it, and the weighted panel always spans at least
+  ±`RESIDUAL_SPAN` standard deviations, so every well-fitted sample is drawn
+  on one residual scale and two figures can be read side by side. A fit that
+  misses widens the panel rather than being clipped.
+- **Axis labels read `quantity / unit`, the IUPAC form**, so no parentheses
+  appear around `a.u.` or `°`. The 2θ axis keeps its numbers, drawn once under
+  the lower panel.
+
+Text is set in a serif face with STIX maths, to sit in a typeset document
 without looking pasted in. Importing the module is what sets it, on the
 matplotlib defaults rather than on one figure, so anything else you draw in
 the same kernel is set in that face too.
@@ -132,7 +148,7 @@ xp.PHASE_COLORS = {"phase 1": "#1f77b4"}  # pin a colour to a phase name
 |---|---|---|
 | `PLOT_X_MIN`, `PLOT_X_MAX` | `None` | The 2θ window. `None` draws the measured range of each file. `x_min` and `x_max` in the metadata win over these, per sample |
 | `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `obs - calc` when `False`, which is subtracted here rather than read from the export. The axis label follows |
-| `RESIDUAL_SPAN` | `5.0` | Narrowest the weighted residual panel is drawn, in standard deviations. Raise it to flatten the trace, lower it to magnify. A larger residual widens the panel instead of being clipped, and the raw residual gets no floor |
+| `RESIDUAL_SPAN` | `5.0` | Half height of the weighted residual panel at its narrowest: the panel always spans at least ±5 standard deviations. Raise it to flatten the trace, lower it to magnify. A larger residual widens the panel instead of being clipped, and the raw residual gets no floor |
 | `USE_SQRT` | `True` | Set in section 3 of the notebook, not on the module. √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
 | `PHASE_COLORS`, `PHASE_LABELS` | empty | Colour and legend name per phase. The metadata file does the same, privately |
 
@@ -142,7 +158,9 @@ it wrote. A file it fails to draw prints its reason and the run continues, and
 every failure is repeated in the summary at the end. Section 4 redraws one
 file in place on every change and prints the metadata row for the window on
 screen. Its Save to output button writes that window to `output/` under the
-name the batch uses. Every other control there previews only.
+batch name, with `_linear` or `_unweighted` when its two checkboxes differ
+from the batch, so a preview never overwrites a batch figure. Every other
+control there previews only.
 
 ## What it accepts
 
@@ -162,8 +180,8 @@ The CSV that the GSAS-II publication-plot dialog saves, not the one from
 
 > [!WARNING]
 > Save the plot on a linear intensity axis. `obs` is copied from the data but
-> `calc`, `bkg` and `diff` are copied from the drawn lines, so a square-root
-> plot exports the square roots of those three beside an untouched `obs`, with
+> `calc` and `bkg` are copied from the drawn lines, so a square-root plot
+> exports the square roots of those two beside an untouched `obs`, with
 > nothing in the file to mark it.
 
 The 2θ column is required, and with it either `diff/sigma` or the `obs` and
@@ -208,7 +226,7 @@ rounded. [`test_xrd_plotter.py`](test_xrd_plotter.py) asserts that with
 covers the header-alignment guard, the phase rules, the metadata binding, the
 window, the axis labels and ticks, the residual choice and the batch. Run it
 with `pytest -q`, or run the notebook, which calls it. CI does both on every
-push.
+push to `main` and on every pull request.
 
 Details: [docs/validation.md](docs/validation.md).
 

@@ -17,17 +17,17 @@ line into the notebook's widget state, which a plain output clear does not
 touch, so strip both before every commit:
 
 ```bash
+pip install nbstripout                          # once
 python -m nbstripout XRD_Rietveld_Plotter.ipynb
 ```
 
-## 3. Automatic strip on commit (recommended)
+## 3. Strip on commit instead (recommended)
 
-Install [nbstripout](https://github.com/kynan/nbstripout) once per clone. Git
-then strips outputs at commit time, and a forgotten manual strip leaks
-nothing:
+With [nbstripout](https://github.com/kynan/nbstripout) installed as above,
+register it once per clone. Git then strips outputs at commit time, and a
+forgotten manual strip leaks nothing:
 
 ```bash
-pip install nbstripout
 nbstripout --install        # run inside the git repository
 ```
 
