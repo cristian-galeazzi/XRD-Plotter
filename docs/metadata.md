@@ -53,9 +53,11 @@ and a plain phrase can share one cell. `PHASE_LABELS` in `xrd_plotter.py`
 accepts the same notation for the phase entries of the legend.
 
 Two things to watch. The cell holds a backslash, so keep it out of a
-spreadsheet's formula bar, and a `<phase>_pct` column still matches on the
-printed name, so key it to a fragment that survives the maths, `mgal` rather
-than `phase 2`.
+spreadsheet's formula bar. And when it is a *phase* name that carries maths,
+set through `PHASE_LABELS` or a phase column header, its `<phase>_pct` column
+matches on the printed name, so key that column to a fragment surviving the
+maths, `mgal` rather than `phase 2`. A `formula` cell never affects a
+percentage: it names the sample, not a phase.
 
 ## Colours stay private
 

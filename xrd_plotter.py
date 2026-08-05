@@ -124,7 +124,12 @@ def fmt_pct(p: float) -> str:
 
 
 def residual_column(weighted: bool | None = None) -> str:
-    """Header the lower panel is drawn from, per WEIGHTED_RESIDUALS.
+    """Residual the lower panel is drawn from, per WEIGHTED_RESIDUALS.
+
+    'diff/sigma' is a column read from the file. 'diff' names the raw
+    residual, which is computed as obs - calc rather than read, because the
+    column of that name in a GSAS-II export is the plotted curve and carries
+    the plot's offset.
 
     >>> residual_column()
     'diff/sigma'
@@ -436,13 +441,37 @@ def read_gsas2_csv(csv_path: str | Path, weighted: bool | None = None
         # panel reads as a perfect fit, which is the one lie the figure
         # must not tell.
         wanted = residual_column(weighted)
-        resid_col = col_lower_map.get(wanted)
-        if resid_col is None:
-            return None, None, f"residual column '{wanted}' not found"
-        data["resid"] = clean(df[resid_col])
+        if wanted == "diff":
+            # GSAS-II copies its 'diff' column off the plotted line, which the
+            # plot holds below the pattern by delOffset: 2% of the largest
+            # observed intensity by default, anything at all once the curve is
+            # dragged, and the square roots of both arrays in a square-root
+            # plot. Subtracting the two columns already read is exact and does
+            # not depend on how the export was drawn. 'diff/sigma' needs no
+            # such care: GSAS-II recomputes that one from the data.
+            absent = [k for k in ("obs", "calc") if k in missing]
+            if absent:
+                # Both are named when both are gone, so the reader fixes the
+                # file once instead of learning about the second on a rerun.
+                names = " and ".join(f"'{k}'" for k in absent)
+                was = "column was" if len(absent) == 1 else "columns were"
+                return None, None, ("the raw residual is computed as obs - "
+                                    f"calc, and the {names} {was} not found")
+            data["resid"] = data["obs"] - data["calc"]
+            # Named for the message below: sending the reader to a 'diff'
+            # column would send them to one this branch never opened.
+            source = "obs - calc"
+        else:
+            resid_col = col_lower_map.get(wanted)
+            if resid_col is None:
+                return None, None, f"residual column '{wanted}' not found"
+            data["resid"] = clean(df[resid_col])
+            source = f"the '{wanted}' column"
         if np.all(np.isnan(data["resid"])):
-            return None, None, f"no valid data in the '{wanted}' column"
-        n_nan = int(np.isnan(data["resid"]).sum())
+            return None, None, f"no valid data in {source}"
+        # Only the read path counts NaN here. On the computed path the NaN
+        # came from obs or calc, and both have already reported their own.
+        n_nan = int(np.isnan(data["resid"]).sum()) if wanted != "diff" else 0
         if n_nan:
             warnings.append(f"column '{wanted}': {n_nan} non-numeric values -> NaN")
 

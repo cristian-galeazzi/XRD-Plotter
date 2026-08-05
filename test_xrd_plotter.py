@@ -501,9 +501,72 @@ def test_unweighted_residuals(synth, drawn):
                          drawn.pct, weighted=False)
     assert fig.axes[1].get_ylabel() == r"$\Delta I$ / a.u."
 
-    _, _, error = xp.read_gsas2_csv(synth.a, weighted=False)
-    assert error == "residual column 'diff' not found", error
+    # sample_A carries no 'diff' column and needs none: obs and calc are there.
+    data, _, error = xp.read_gsas2_csv(synth.a, weighted=False)
+    assert error is None, error
+    assert np.array_equal(data["resid"], synth.obs - synth.calc), "not exact"
     assert xp.WEIGHTED_RESIDUALS is True, "the constant must not be mutated"
+
+
+def test_the_offset_diff_column_is_not_the_residual(tmp_path):
+    """GSAS-II writes the difference curve as it plots it, shifted down.
+
+    CopyRietveld2csv copies diff from the plotted line, and the plot holds
+    that line below the pattern by delOffset, 2% of the largest observed
+    intensity until the curve is dragged. diff/sigma is recomputed from the
+    data and carries no shift. The shift is one constant on every point of
+    the column. Reading that column would put the unweighted trace
+    off the zero the panel holds at its middle.
+    """
+    x = np.linspace(10.0, 90.0, 200)
+    calc = 1000.0 * np.exp(-((x - 30.0) ** 2) / 2.0) + 50.0
+    obs = calc + np.linspace(-20.0, 20.0, 200)
+    csv = tmp_path / "offset_diff.csv"
+    pd.DataFrame({"x, 2theta (deg)": x, "obs": obs, "calc": calc,
+                  "bkg": np.full(200, 50.0),
+                  "diff": obs - calc - 0.02 * obs.max(),
+                  "diff/sigma": (obs - calc) / 5.0}).to_csv(csv, sep=";",
+                                                            index=False)
+
+    data, _, error = xp.read_gsas2_csv(csv, weighted=False)
+    assert error is None, error
+    assert np.array_equal(data["resid"], obs - calc), "the offset column was read"
+
+    # obs alone cannot make a residual, and a flat panel reads as a perfect
+    # fit, so the file is isolated rather than drawn.
+    no_calc = tmp_path / "no_calc_unweighted.csv"
+    pd.DataFrame({"x, 2theta (deg)": x, "obs": obs,
+                  "diff": obs - calc}).to_csv(no_calc, sep=";", index=False)
+    _, _, error = xp.read_gsas2_csv(no_calc, weighted=False)
+    assert error == ("the raw residual is computed as obs - calc, and the "
+                     "'calc' column was not found"), error
+
+
+def test_the_unweighted_refusals_name_the_column_at_fault(tmp_path):
+    """No message sends the reader to 'diff', a column this path never reads.
+
+    A file can fail here in three ways, and each one has to name what is
+    actually wrong: both columns gone, one gone, or one present but holding
+    no number at all.
+    """
+    x = np.linspace(10.0, 90.0, 50)
+    obs = np.linspace(100.0, 200.0, 50)
+
+    def read(frame):
+        path = tmp_path / f"case_{len(list(tmp_path.iterdir()))}.csv"
+        pd.DataFrame(frame).to_csv(path, sep=";", index=False)
+        return xp.read_gsas2_csv(path, weighted=False)[2]
+
+    assert read({"x, 2theta (deg)": x, "obs": obs, "diff": obs}) == (
+        "the raw residual is computed as obs - calc, and the 'calc' column "
+        "was not found")
+    assert read({"x, 2theta (deg)": x, "bkg": obs, "diff": obs}) == (
+        "the raw residual is computed as obs - calc, and the 'obs' and "
+        "'calc' columns were not found")
+    # calc present but unreadable: the file is refused by what it holds, not
+    # by a column that is missing.
+    assert read({"x, 2theta (deg)": x, "obs": obs, "calc": "n/a"}) == (
+        "no valid data in obs - calc")
 
 
 @pytest.mark.parametrize("weighted", [True, False])

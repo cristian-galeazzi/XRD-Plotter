@@ -41,9 +41,12 @@ at step 3.
 3. **Download this repository.** Use the green *Code* button above, then
    *Download ZIP*, then unzip it somewhere you find again.
 
-4. **Fix the header of each export once.** GSAS-II writes one header name too
-   many, so the names sit one column left of their data. Delete the `used`
-   cell of the header row in a spreadsheet and shift that row one place left.
+4. **Check the header of each export once.** GSAS-II usually writes one header
+   name too many, so the names sit one column left of their data, but not
+   always. Read the first cell of the first data row: `1` or `0` means the
+   file is aligned and needs nothing, your lowest 2θ means it is shifted, and
+   then you delete the `used` cell of the header row in a spreadsheet and
+   shift that row one place left.
    Details in [the input format reference](docs/input-format.md).
 
 5. **Open `XRD_Rietveld_Plotter.ipynb`** in VS Code, put your corrected `.csv`
@@ -109,7 +112,9 @@ side. A fit that misses widens the panel rather than being clipped. The 2θ
 axis keeps its numbers, drawn once under the lower panel. Axis labels read as
 `quantity / unit`, the IUPAC form, so no parentheses appear around `a.u.` or
 `°`. Text is set in a serif face with STIX maths, to sit in a typeset document
-without looking pasted in.
+without looking pasted in. Importing the module is what sets it, on the
+matplotlib defaults rather than on one figure, so anything else you draw in
+the same kernel is set in that face too.
 
 ## Settings
 
@@ -119,15 +124,15 @@ it:
 
 ```python
 xp.PLOT_X_MIN, xp.PLOT_X_MAX = 13, 85     # fix the 2theta window
-xp.WEIGHTED_RESIDUALS = False             # raw diff in the lower panel
+xp.WEIGHTED_RESIDUALS = False             # raw obs - calc in the lower panel
 xp.PHASE_COLORS = {"phase 1": "#1f77b4"}  # pin a colour to a phase name
 ```
 
 | Setting | Default | Effect |
 |---|---|---|
 | `PLOT_X_MIN`, `PLOT_X_MAX` | `None` | The 2θ window. `None` draws the measured range of each file. `x_min` and `x_max` in the metadata win over these, per sample |
-| `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `diff` when `False`. The axis label follows |
-| `RESIDUAL_SPAN` | `5.0` | Narrowest the weighted residual panel is drawn, in standard deviations. Raise it to flatten the trace, lower it to magnify. A larger residual widens the panel instead of being clipped, and the raw `diff` gets no floor |
+| `WEIGHTED_RESIDUALS` | `True` | `diff/sigma` in the lower panel, or the raw `obs - calc` when `False`, which is subtracted here rather than read from the export. The axis label follows |
+| `RESIDUAL_SPAN` | `5.0` | Narrowest the weighted residual panel is drawn, in standard deviations. Raise it to flatten the trace, lower it to magnify. A larger residual widens the panel instead of being clipped, and the raw residual gets no floor |
 | `USE_SQRT` | `True` | Set in section 3 of the notebook, not on the module. √I on the drawn copy alone, so weak reflections stay visible beside a strong one. Nothing is written back and the residual panel is untouched |
 | `PHASE_COLORS`, `PHASE_LABELS` | empty | Colour and legend name per phase. The metadata file does the same, privately |
 
@@ -145,23 +150,31 @@ The CSV that the GSAS-II publication-plot dialog saves, not the one from
 *Export → Powder data as*.
 
 > [!WARNING]
-> That export needs one edit before its first run. GSAS-II writes one header
-> name more than it writes data fields, so every name sits one column left of
-> its own data: the angles arrive under `used` and the intensities arrive under
-> `x, 2theta (deg)`. Open the file in a spreadsheet, delete the `used` cell
-> of the header row and shift that row one place left. The notebook refuses a
-> file still shifted rather than drawing it, since the figure would look
-> convincing and be wrong.
+> That export usually needs one edit before its first run, and sometimes none.
+> GSAS-II usually writes one header name more than it writes data fields, so
+> every name sits one column left of its own data. Read the first cell of the
+> first data row: `1` or `0` means the file is aligned and needs nothing, your
+> lowest 2θ means it is shifted, and then you delete the `used` cell of the
+> header row in a spreadsheet and shift that row one place left. Do not make
+> that edit to an aligned file, which would create the shift. The notebook
+> refuses a file still shifted rather than drawing it, since the figure would
+> look convincing and be wrong.
 
-After that edit the 2θ column and a residual column are required, `obs`,
-`calc` and `bkg` are filled with zeros when absent, and every other column
-that holds only a handful of values is read as the reflection positions of a
-phase. Phase fractions are in no export: you type them into the metadata
-file.
+> [!WARNING]
+> Save the plot on a linear intensity axis. `obs` is copied from the data but
+> `calc`, `bkg` and `diff` are copied from the drawn lines, so a square-root
+> plot exports the square roots of those three beside an untouched `obs`, with
+> nothing in the file to mark it.
+
+The 2θ column is required, and with it either `diff/sigma` or the `obs` and
+`calc` pair, depending on which panel you draw. `obs`, `calc` and `bkg` are
+filled with zeros when absent, and every other column that holds only a
+handful of values is read as the reflection positions of a phase. Phase
+fractions are in no export: you type them into the metadata file.
 
 Leave the header names GSAS-II wrote and rename the phase columns only. The
 pattern columns are found by their names, so `obs` under another name is
-drawn flat and a renamed residual column stops the file. A phase column is
+drawn flat and a renamed `diff/sigma` stops the file. A phase column is
 the opposite: whatever you call it is what the legend prints, so `Phase 1`
 becomes `Rutile` by editing that header alone.
 
@@ -169,7 +182,7 @@ Both field separators, both decimal marks, UTF-8 and Latin-1, and rows longer
 than the header are handled. A file that cannot be drawn is reported with its
 reason while the rest of the batch runs.
 
-Full contract, and the header fix in detail:
+Full contract, and the header check in detail:
 [docs/input-format.md](docs/input-format.md).
 
 ## Limitations

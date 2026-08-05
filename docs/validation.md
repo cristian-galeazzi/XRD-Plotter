@@ -69,8 +69,10 @@ version this is developed with.
 | Both intensity labels and the 2θ label | `Intensity / a.u.`, `√Intensity / a.u.` and `2θ / °`, the IUPAC `quantity / unit` form with no parentheses |
 | The ticks of the finished figure | Neither y axis numbered nor marked, the 2θ numbers and marks drawn once, under the lower panel |
 | The residual panel of both modes | One line drawn on it, the trace |
-| A well-fitted pattern, one with a residual past the floor, and a raw `diff` | Limits symmetric about zero in all three, held at `RESIDUAL_SPAN` for the first, widened rather than clipped for the second, unfloored for the third |
-| The same export read with `weighted=False` | The raw `diff` read bit-exact, the panel relabelled, a file without `diff` isolated, `WEIGHTED_RESIDUALS` left alone |
+| A well-fitted pattern, one with a residual past the floor, and a raw residual | Limits symmetric about zero in all three, held at `RESIDUAL_SPAN` for the first, widened rather than clipped for the second, unfloored for the third |
+| The same export read with `weighted=False` | The residual subtracted as `obs - calc` bit-exact, the panel relabelled, `WEIGHTED_RESIDUALS` left alone |
+| An export whose `diff` column carries the offset GSAS-II puts on the plotted curve, 2% of the largest observed intensity | The offset column never read, the panel drawn from `obs - calc`, and a file with `obs` but no `calc` isolated by name |
+| The three ways the unweighted panel can be refused: `calc` absent, both `obs` and `calc` absent, `calc` present but holding no number | Each names what is actually wrong, both absent columns reported at once, and no message sends the reader to `diff` |
 | The function behind the section 4 panel | Limits applied to both axes, the metadata line returned, no setting mutated, an unreadable file raising |
 | The section 4 save reusing the batch name and writer | `_sqrt`, `_linear` and the `_unweighted` suffix chosen from the toggles, both files written under that name |
 | The window line the batch prints | The drawn 2theta range, marked `metadata` when a row set it and `auto` otherwise |
@@ -80,6 +82,7 @@ version this is developed with.
 
 ## What validation does not cover
 
-The plotting is checked. The crystallography is yours. The residual panel is
-copied from the refinement, not recomputed, so a refinement converged on the
-wrong structure still produces a clean-looking figure.
+The plotting is checked. The crystallography is yours. The weighted panel is
+copied from the refinement and the unweighted one is `obs - calc`, so neither
+is checked against the structure and a refinement converged on the wrong one
+still produces a clean-looking figure.
