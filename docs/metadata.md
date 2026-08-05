@@ -34,6 +34,29 @@ longer name wins, so `phase_1_color` beats a general `phase_color`. Two
 `_pct` columns matching one phase print no percentage instead, and say so.
 Decimal commas work here too.
 
+## Subscripts in a formula
+
+The `formula` cell reaches the legend as it is written, and matplotlib draws
+it, so anything between `$` signs is typeset as maths. Write the whole formula
+inside `$\mathrm{...}$` and the letters stay upright, as a chemical formula
+should be, while `_` starts a subscript and `^` a superscript. Braces group
+anything longer than one character:
+
+```
+filename;formula
+sample_3.csv;$\mathrm{Fe_{1-\delta}O}$
+sample_4.csv;$\mathrm{MgAl_2O_4}$ standard
+```
+
+Text outside the `$` signs is drawn in the ordinary figure font, so a formula
+and a plain phrase can share one cell. `PHASE_LABELS` in `xrd_plotter.py`
+accepts the same notation for the phase entries of the legend.
+
+Two things to watch. The cell holds a backslash, so keep it out of a
+spreadsheet's formula bar, and a `<phase>_pct` column still matches on the
+printed name, so key it to a fragment that survives the maths, `mgal` rather
+than `phase 2`.
+
 ## Colours stay private
 
 Pinning a colour here keeps the phase palette in your own uncommitted file

@@ -5,6 +5,7 @@ suite runs on any machine, including a fresh clone with an empty data folder,
 and no measurement is ever read. Run it with `pytest -q`, or through section 2
 of the notebook, which calls pytest for you.
 """
+from itertools import zip_longest
 from types import SimpleNamespace
 
 import matplotlib
@@ -302,6 +303,40 @@ def test_fit_statistics_are_not_read_as_phases(tmp_path):
     assert phases_of("Scan note") == [], "the blocklist addition was ignored"
 
 
+def test_every_reflection_position_reaches_the_figure(tmp_path):
+    """A short tick column, padded as GSAS-II pads it, arrives whole.
+
+    The export fills the tail of a tick column with a single space, and the
+    two phases hold a different number of positions. Nothing between the file
+    and the drawn marks may drop, reorder or round one.
+    """
+    x = np.linspace(13.0, 85.0, 400)
+    alpha = [15.111111111111111, 22.987654321, 31.400000000000006,
+             39.75, 44.123456, 52.9, 61.000000000001, 70.54321]
+    beta = [19.5, 27.2, 36.0, 48.2, 57.0, 66.987654321]
+    csv = tmp_path / "padded.csv"
+    with open(csv, "w") as fh:
+        print("2theta;obs;calc;bkg;Alpha hkl;Beta hkl;diff/sigma", file=fh)
+        for row in zip_longest(x, x, x, x, alpha, beta, x, fillvalue=" "):
+            print(";".join(v if isinstance(v, str) else repr(float(v))
+                           for v in row), file=fh)
+
+    data, phase_cols, error = xp.read_gsas2_csv(csv)
+    assert error is None, error
+    args = xp.prepare_data(data, phase_cols)
+    phases = args[-1]
+    assert np.array_equal(phases["Alpha hkl"], np.array(alpha)), "read altered"
+    assert np.array_equal(phases["Beta hkl"], np.array(beta)), "read altered"
+
+    fig = xp.create_plot(*args, "padded", {})
+    rows = sorted(([seg[0][0] for seg in c.get_segments()]
+                   for c in fig.axes[0].collections
+                   if hasattr(c, "get_segments")), key=len)
+    assert [len(r) for r in rows] == [6, 8], "a mark was dropped at draw time"
+    assert np.array_equal(np.array(rows[0]), np.array(beta))
+    assert np.array_equal(np.array(rows[1]), np.array(alpha))
+
+
 def test_column_too_full_is_reported_not_drawn(synth, capsys):
     _, phase_cols, error = xp.read_gsas2_csv(synth.tmp / "dense_column.csv")
     assert error is None and "Wide hkl" not in phase_cols, phase_cols
@@ -386,7 +421,7 @@ def test_metadata_variants(synth, drawn):
     fig = xp.create_plot(*drawn.args, name, pct)
     texts, _ = legend_of(fig)
     assert "Phase 1 (60.5%)" in texts, texts
-    assert fig.axes[1].get_ylabel() == r"diff/$\sigma$"
+    assert fig.axes[1].get_ylabel() == r"$\Delta I\:/\:\sigma$"
 
 
 def test_colliding_percentage_columns_print_nothing():
@@ -434,13 +469,13 @@ def test_top_margin_clears_a_calc_peak_above_the_obs(tmp_path):
 
 # 10b. Only the 2theta axis is numbered.
 @pytest.mark.parametrize("use_sqrt, ylabel", [
-    (True, r"$\sqrt{Intensity}$ / a.u."),
+    (True, r"$\sqrt{\mathrm{Intensity}}$ / a.u."),
     (False, r"Intensity / a.u."),
 ])
 def test_axis_labels_carry_no_parentheses(drawn, use_sqrt, ylabel):
     fig = xp.create_plot(*drawn.args, drawn.name, drawn.pct, use_sqrt=use_sqrt)
     assert fig.axes[0].get_ylabel() == ylabel
-    assert fig.axes[1].get_xlabel() == r"2$\theta$ / $^\circ$"
+    assert fig.axes[1].get_xlabel() == r"$2\theta\:/\:^\circ$"
 
 
 def test_neither_intensity_axis_is_ticked_or_numbered(drawn):
@@ -464,7 +499,7 @@ def test_unweighted_residuals(synth, drawn):
     assert np.array_equal(data["resid"], synth.obs - synth.calc), "not exact"
     fig = xp.create_plot(*xp.prepare_data(data, phase_cols), drawn.name,
                          drawn.pct, weighted=False)
-    assert fig.axes[1].get_ylabel() == r"diff / a.u."
+    assert fig.axes[1].get_ylabel() == r"$\Delta I$ / a.u."
 
     _, _, error = xp.read_gsas2_csv(synth.a, weighted=False)
     assert error == "residual column 'diff' not found", error
@@ -530,7 +565,7 @@ def test_replot_file(synth):
     assert line.splitlines()[1] == "sample_A.csv;Sample A (synthetic);20;60.5"
 
     fig, _ = xp.replot_file(synth.full, synth.meta, weighted=False)
-    assert fig.axes[1].get_ylabel() == r"diff / a.u."
+    assert fig.axes[1].get_ylabel() == r"$\Delta I$ / a.u."
     assert xp.WEIGHTED_RESIDUALS is True, "the constant must not be mutated"
 
     with pytest.raises(ValueError, match="residual column"):

@@ -108,7 +108,8 @@ sample is drawn on one residual scale and two figures can be read side by
 side. A fit that misses widens the panel rather than being clipped. The 2θ
 axis keeps its numbers, drawn once under the lower panel. Axis labels read as
 `quantity / unit`, the IUPAC form, so no parentheses appear around `a.u.` or
-`°`.
+`°`. Text is set in a serif face with STIX maths, to sit in a typeset document
+without looking pasted in.
 
 ## Settings
 

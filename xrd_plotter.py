@@ -63,6 +63,17 @@ FONT_SIZE_LABEL = 20
 FONT_SIZE_LEGEND = 16
 FONT_SIZE_TICK = 16
 
+# Publication typography: serif text, STIX maths. STIXGeneral is the text
+# companion of that maths font and ships inside matplotlib, so a machine
+# without Times New Roman still draws words that match the symbols beside
+# them. DejaVu Serif, the matplotlib default, is far wider than Times and
+# would not, which is why it is last rather than second.
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "STIXGeneral", "DejaVu Serif"],
+    "mathtext.fontset": "stix",
+})
+
 # --- Phase columns ----------------------------------------------------
 # Headers GSAS-II writes itself, plus the fit statistics people keep beside
 # the pattern. Everything else that holds only a few values is taken to be
@@ -692,7 +703,9 @@ def create_plot(theta: np.ndarray, obs: np.ndarray, calc: np.ndarray,
     # 'quantity / unit' per IUPAC: the slash divides by the unit, so the axis
     # would carry pure numbers. Parentheses are needed only for a compound
     # unit, where 'I / counts s^-1' would read as (I/counts)*s^-1.
-    ylabel = (r"$\sqrt{Intensity}$ / a.u." if use_sqrt
+    # \mathrm keeps the name upright inside the radical. Italic is for symbols,
+    # and an italic word is read as a product of variables.
+    ylabel = (r"$\sqrt{\mathrm{Intensity}}$ / a.u." if use_sqrt
               else r"Intensity / a.u.")
     ax1.set_ylabel(ylabel, fontsize=FONT_SIZE_LABEL, labelpad=10)
     # No tick marks and no numbers on either intensity axis: labelleft does
@@ -740,9 +753,12 @@ def create_plot(theta: np.ndarray, obs: np.ndarray, calc: np.ndarray,
               + ", ".join(o + "_pct" for o in orphans))
 
     ax2.plot(theta, resid, color=COLOR_RESIDUALS, lw=LINEWIDTH_RESIDUALS)
-    ax2.set_xlabel(r"2$\theta$ / $^\circ$", fontsize=FONT_SIZE_LABEL)
-    ax2.set_ylabel(r"diff/$\sigma$" if residual_column(weighted) == "diff/sigma"
-                   else r"diff / a.u.", fontsize=FONT_SIZE_LABEL)
+    ax2.set_xlabel(r"$2\theta\:/\:^\circ$", fontsize=FONT_SIZE_LABEL)
+    # Both panels carry a delta in I: the residual in intensity units, and
+    # the same difference standardised by the uncertainty of the point.
+    ax2.set_ylabel(r"$\Delta I\:/\:\sigma$"
+                   if residual_column(weighted) == "diff/sigma"
+                   else r"$\Delta I$ / a.u.", fontsize=FONT_SIZE_LABEL)
     ax2.set_xlim(x_low, x_high)
     # The residual axis loses its numbers too, and no line is drawn at zero.
     # Zero is held at the middle of the panel instead, by limits symmetric
