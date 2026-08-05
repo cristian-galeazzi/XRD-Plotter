@@ -220,7 +220,9 @@ def test_header_matching(tmp_path):
         data, phase_cols, error = xp.read_gsas2_csv(csv)
         assert error is None, error
         assert np.array_equal(data["x"], x), "a phase column was read as 2theta"
-        assert np.any(data["obs"] != 0) is np.True_ or not read, header
+        # bool() rather than the numpy singleton: an identity test against
+        # np.True_ passes here and is not promised by every numpy version.
+        assert bool(np.any(data["obs"] != 0)) is read, header
         assert phase_cols == ["Max, phase"], phase_cols
 
 
@@ -396,6 +398,9 @@ def test_metadata_colour_follows_its_phase(synth, drawn):
 def test_longest_key_wins_and_nameless_column_is_skipped():
     assert xp.longest_match({"phase": "#000000", "phase 1": "#ffffff"},
                             "Phase 1") == "#ffffff"
+    # A key typed as the legend prints it matches too: the metadata file
+    # yields lowercase keys, but PHASE_COLORS is written by hand.
+    assert xp.longest_match({"Phase 1": "#ffffff"}, "Phase 1") == "#ffffff"
     assert xp.metadata_keys(["_pct", "phase_1_pct"], "_pct") == {
         "phase 1": "phase_1_pct"}
 
@@ -404,6 +409,21 @@ def test_longest_key_wins_and_nameless_column_is_skipped():
 def test_module_label_and_colour_dictionaries(drawn):
     xp.PHASE_LABELS = {"phase 1": "Alpha"}
     xp.PHASE_COLORS = {"alpha": "#654321"}
+    assert xp.phase_label("Phase 1 hkl") == "Alpha"
+    fig = xp.create_plot(*drawn.args, drawn.name, drawn.pct)
+    texts, colours = legend_of(fig)
+    assert texts == ["Alpha", "Phase 2 (40%)"], texts
+    assert colours == ["#654321", xp.PHASE_COLOR_CYCLE[0]], "the pin missed"
+
+
+def test_module_dictionary_keys_are_matched_case_insensitively(drawn):
+    """A key typed as the legend prints it must work like a lowercase one.
+
+    The metadata file lowers its column names, so only a key written by hand
+    can carry capitals, and a colour that silently misses looks deliberate.
+    """
+    xp.PHASE_LABELS = {"Phase 1": "Alpha"}
+    xp.PHASE_COLORS = {"Alpha": "#654321"}
     assert xp.phase_label("Phase 1 hkl") == "Alpha"
     fig = xp.create_plot(*drawn.args, drawn.name, drawn.pct)
     texts, colours = legend_of(fig)
@@ -426,6 +446,23 @@ def test_metadata_variants(synth, drawn):
 
 def test_colliding_percentage_columns_print_nothing():
     assert xp.phase_fraction({"phase": 40.0, "phase 1": 45.0}, "Phase 1") == 0.0
+
+
+def test_an_unreadable_metadata_file_is_ignored_not_raised(tmp_path, capsys):
+    """A metadata file with no header must not end the batch.
+
+    It is read once, outside the per-file guard, so raising here would lose
+    every figure of the run over a file someone has only just created.
+    """
+    empty = tmp_path / "Samples_metadata.csv"
+    empty.write_text("")
+    assert xp.load_metadata(empty).empty
+    assert "metadata could not be read" in capsys.readouterr().out
+    # A file with rows but no filename column is reported the same way.
+    headerless = tmp_path / "no_name.csv"
+    headerless.write_text("formula;phase_1_pct\nSample;60\n")
+    assert xp.load_metadata(headerless).empty
+    assert "needs a 'filename' or 'file' column" in capsys.readouterr().out
 
 
 # 10. The 2theta window and the intensity axis.
@@ -492,6 +529,34 @@ def test_neither_intensity_axis_is_ticked_or_numbered(drawn):
     assert upper.get_xticklabels() == [], "the upper panel repeated the 2theta numbers"
 
 
+def test_the_module_sets_serif_text_and_stix_maths():
+    """Importing the engine sets the typography, for every figure it draws.
+
+    The maths font and the text font are chosen together: STIX is drawn on
+    the metrics of Times, so a label mixing words and symbols stays even.
+    """
+    assert plt.rcParams["font.family"] == ["serif"]
+    assert plt.rcParams["mathtext.fontset"] == "stix"
+    assert plt.rcParams["font.serif"][:2] == ["Times New Roman", "STIXGeneral"]
+
+
+# 10c. The square root is applied to the drawn copy alone.
+def test_the_sqrt_transform_is_display_only_and_clips_negatives():
+    data = {"x": np.array([10.0, 20.0, 30.0]),
+            "obs": np.array([4.0, 9.0, -16.0]),
+            "calc": np.array([1.0, 4.0, 9.0]),
+            "bkg": np.zeros(3), "resid": np.array([0.5, -0.5, 0.5])}
+    _, obs, calc, _, resid, _ = xp.prepare_data(data, [], use_sqrt=True)
+    # Clipped, not mirrored: a negative intensity drawn as its own square root
+    # would be a peak that was never measured.
+    assert np.array_equal(obs, [2.0, 3.0, 0.0]), obs
+    assert np.array_equal(calc, [1.0, 2.0, 3.0]), calc
+    # The residual panel is in the units it arrived in, either way.
+    assert np.array_equal(resid, data["resid"])
+    _, raw, _, _, _, _ = xp.prepare_data(data, [], use_sqrt=False)
+    assert np.array_equal(raw, data["obs"]), "the stored pattern was rewritten"
+
+
 # 11. The unweighted panel.
 def test_unweighted_residuals(synth, drawn):
     data, phase_cols, error = xp.read_gsas2_csv(synth.full, weighted=False)
@@ -514,9 +579,8 @@ def test_the_offset_diff_column_is_not_the_residual(tmp_path):
     CopyRietveld2csv copies diff from the plotted line, and the plot holds
     that line below the pattern by delOffset, 2% of the largest observed
     intensity until the curve is dragged. diff/sigma is recomputed from the
-    data and carries no shift. The shift is one constant on every point of
-    the column. Reading that column would put the unweighted trace
-    off the zero the panel holds at its middle.
+    data and carries no shift. Reading the offset column would put the
+    unweighted trace off the zero the panel holds at its middle.
     """
     x = np.linspace(10.0, 90.0, 200)
     calc = 1000.0 * np.exp(-((x - 30.0) ** 2) / 2.0) + 50.0
@@ -634,6 +698,12 @@ def test_replot_file(synth):
     with pytest.raises(ValueError, match="residual column"):
         xp.replot_file(synth.tmp / "only_obs.csv", synth.meta)
 
+    # Left unset it follows the module, like every other entry point, so a
+    # caller who set the constant is not handed the other panel.
+    xp.WEIGHTED_RESIDUALS = False
+    fig, _ = xp.replot_file(synth.full, synth.meta)
+    assert fig.axes[1].get_ylabel() == r"$\Delta I$ / a.u."
+
 
 # 12b. The section 4 Save button reuses the batch naming and writer.
 def test_output_basename_matches_the_batch():
@@ -721,3 +791,25 @@ def test_the_batch_window_line_names_the_metadata_source(synth, tmp_path,
 
     xp.process_folder(folder, meta, out, show=False)
     assert "  2theta window: 20 to 70 (metadata)" in capsys.readouterr().out
+
+    # A window from the module constants is neither: naming it 'auto' would
+    # send the reader looking for a metadata row that is not there.
+    xp.PLOT_X_MIN, xp.PLOT_X_MAX = 15.0, 80.0
+    xp.process_folder(folder, folder / "absent.csv", out, show=False)
+    assert "  2theta window: 15 to 80 (settings)" in capsys.readouterr().out
+
+
+def test_the_batch_follows_the_residual_setting(synth, tmp_path):
+    """WEIGHTED_RESIDUALS is read in three places on the way to disk.
+
+    The panel, its label and the file name have to agree, or a figure lands
+    under the weighted name carrying the raw difference.
+    """
+    folder, out = tmp_path / "in", tmp_path / "out"
+    folder.mkdir()
+    synth.df.to_csv(folder / "sample_A.csv", sep=";", index=False)
+
+    xp.WEIGHTED_RESIDUALS = False
+    outcome = xp.process_folder(folder, folder / "absent.csv", out, show=False)
+    assert [b for _, _, b in outcome] == ["sample_A_XRD_analysis_sqrt_unweighted"]
+    assert (out / "png" / "sample_A_XRD_analysis_sqrt_unweighted.png").is_file()

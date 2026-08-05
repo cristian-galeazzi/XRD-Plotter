@@ -30,9 +30,11 @@ jobs:
       # whatever Jupyter host the reader already has, not to requirements.txt.
       - name: Install dependencies
         run: pip install -r requirements.txt nbconvert ipykernel
-      # The suite tests the engine directly and gives a per-test report.
+      # The suite tests the engine directly and gives a per-test report. The
+      # docstring examples run beside it: they are the documentation a reader
+      # meets first, so they are held to the same gate as the assertions.
       - name: Run the validation suite
-        run: pytest -q
+        run: pytest -q --doctest-modules xrd_plotter.py test_xrd_plotter.py
       # The notebook is a second target: it must still import the engine,
       # run the suite and reach the batch cell, which finds data/ empty and
       # reports it instead of failing.

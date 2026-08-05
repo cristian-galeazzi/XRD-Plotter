@@ -9,6 +9,10 @@ on a copy, so the functions see the change:
 
     import xrd_plotter as xp
     xp.PLOT_X_MIN, xp.PLOT_X_MAX = 13, 85
+
+Importing this module also sets the serif typography on the matplotlib
+defaults, for the whole process rather than for one figure, so any other
+figure drawn in the same kernel is set in that face too.
 """
 import io
 from collections.abc import Iterable
@@ -271,9 +275,13 @@ def longest_match(mapping: dict[str, str] | None, label: str) -> str | None:
 
     >>> longest_match({"phase": "gray", "phase 1": "red"}, "Phase 1")
     'red'
+    >>> longest_match({"Phase 1": "red"}, "phase 1")
+    'red'
     >>> longest_match({"phase": "gray"}, "Other")
     """
-    keys = [k for k in (mapping or {}) if k and k in label.lower()]
+    # Both sides folded: a key typed as it appears in the legend ('Phase 1')
+    # has to match as readily as the lowercase keys the metadata file yields.
+    keys = [k for k in (mapping or {}) if k and k.lower() in label.lower()]
     return mapping[max(keys, key=len)] if keys else None
 
 
@@ -500,12 +508,16 @@ def read_gsas2_csv(csv_path: str | Path, weighted: bool | None = None
             phase_cols.append(col)
             data[col] = vals
 
-        if warnings:
-            print("\n".join(f"  ! {w}" for w in warnings))
         return data, phase_cols, None
 
     except Exception as e:  # isolate unreadable files, keep the batch running
         return None, None, f"read error: {e}"
+    finally:
+        # On every way out, so a file that is refused still shows what was
+        # noticed before the refusal. Two candidate 2theta columns, or a
+        # count of skipped rows, is usually the explanation of the refusal.
+        if warnings:
+            print("\n".join(f"  ! {w}" for w in warnings))
 
 
 def load_metadata(metadata_path: str | Path) -> pd.DataFrame:
@@ -535,8 +547,15 @@ def load_metadata(metadata_path: str | Path) -> pd.DataFrame:
         df = pd.read_csv(metadata_path, sep=";", encoding="utf-8", dtype=str)
         if len(df.columns) <= 1:
             df = pd.read_csv(metadata_path, sep=",", encoding="utf-8", dtype=str)
-    except (pd.errors.ParserError, UnicodeDecodeError):
-        df = pd.read_csv(metadata_path, sep=",", encoding="latin-1", dtype=str)
+    except (pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError):
+        try:
+            df = pd.read_csv(metadata_path, sep=",", encoding="latin-1", dtype=str)
+        except Exception as e:
+            # A file with no header row at all reaches here. It is read
+            # outside the per-file guard of the batch, so raising would end
+            # the whole run over a metadata file someone has just created.
+            print(f"  ! metadata could not be read ({e}), ignored.")
+            return pd.DataFrame()
 
     df.columns = df.columns.str.strip().str.lower()
     fname_col = next((c for c in df.columns if c in ("filename", "file")), None)
@@ -657,9 +676,11 @@ def prepare_data(data: dict[str, np.ndarray], phase_cols: list[str],
     x = data["x"][mask]
 
     if use_sqrt:
-        obs = np.sqrt(np.abs(data["obs"][mask]))
-        calc = np.sqrt(np.abs(data["calc"][mask]))
-        bkg = np.sqrt(np.abs(data["bkg"][mask]))
+        # Clipped, not made positive: a negative intensity has no square root,
+        # and a background-subtracted export full of them would be mirrored
+        # into peaks that were never measured. Clipping puts them on the axis.
+        obs, calc, bkg = (np.sqrt(np.clip(data[k][mask], 0.0, None))
+                          for k in ("obs", "calc", "bkg"))
     else:
         obs, calc, bkg = (data[k][mask] for k in ("obs", "calc", "bkg"))
 
@@ -722,6 +743,9 @@ def create_plot(theta: np.ndarray, obs: np.ndarray, calc: np.ndarray,
     tick_colors = phase_colors([labels[ph] for ph in ordered], colors)
     rows = 0
     for ph in ordered:
+        # A reflection sits at a real angle, so a zero left in a phase column
+        # is padding rather than a position and would draw a tick against the
+        # left border.
         locs = phases[ph][phases[ph] > 0.1]
         if len(locs):
             y = base_y - rows * step_y
@@ -826,9 +850,11 @@ def replot_file(csv_path: str | Path, metadata_file: str | Path,
                 x_min: float | None = None, x_max: float | None = None,
                 y_min: float | None = None, y_max: float | None = None,
                 use_sqrt: bool = True,
-                weighted: bool | None = True) -> tuple[Figure, str]:
+                weighted: bool | None = None) -> tuple[Figure, str]:
     """Draw one file with the given window and toggles, without saving it.
 
+    weighted defaults to the WEIGHTED_RESIDUALS setting, as everywhere else,
+    so a caller who set it on the module gets the panel it asks for.
     Returns (figure, metadata_line): the line is the row to paste into the
     metadata file so that the batch run reproduces this 2theta window.
     Raises ValueError when the file cannot be read or drawn.
@@ -962,7 +988,7 @@ def process_folder(data_folder: str | Path,
         failed = [name for name, status, _ in results if status == "error"]
     """
     data_dir = Path(data_folder)
-    data_dir.mkdir(exist_ok=True)  # first run: created empty, ready for your files
+    data_dir.mkdir(parents=True, exist_ok=True)  # first run: created empty, ready for your files
 
     meta_name = Path(metadata_file).name
     files = sorted(f for f in data_dir.glob("*.csv") if f.name != meta_name)
@@ -972,7 +998,7 @@ def process_folder(data_folder: str | Path,
 
     meta_df = load_metadata(metadata_file)
     out_dir = Path(output_folder)
-    out_dir.mkdir(exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
     for f in files:
@@ -988,11 +1014,13 @@ def process_folder(data_folder: str | Path,
             report_colors(phase_cols, colors)
             theta, obs, calc, bkg, resid, phases = prepare_data(
                 data, phase_cols, use_sqrt=use_sqrt)
-            # Show the 2theta window actually drawn, and whether it came from
-            # the metadata row or from the measured range, so a limit that
-            # did not land (name mismatch, blank cell) is visible at a glance.
+            # Show the 2theta window actually drawn and where it came from, so
+            # a limit that did not land (name mismatch, blank cell) is visible
+            # at a glance rather than read off the figure.
             low, high = plot_window(theta, *window)
-            source = "metadata" if window != (None, None) else "auto"
+            source = ("metadata" if window != (None, None)
+                      else "settings" if (PLOT_X_MIN, PLOT_X_MAX) != (None, None)
+                      else "auto")
             print(f"  2theta window: {low:g} to {high:g} ({source})")
             fig = create_plot(theta, obs, calc, bkg, resid, phases, name, pct,
                               use_sqrt=use_sqrt, xlim=window, colors=colors)
