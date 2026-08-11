@@ -7,10 +7,12 @@ per-sample figures the notebook writes; this one answers a different
 question, which reflection appears, moves or goes away across the series.
 
 The tick rows and the guides are read from the first file in SERIES that
-has any reflections, one row of ticks per phase for the whole series
-rather than one per sample. In a series drawn precisely because
+carries a reflection column, one row of ticks per phase for the whole
+series rather than one per sample. In a series drawn precisely because
 reflections move, remember that the ticks are anchored to that one file
-and not to every trace on top of them.
+and not to every trace on top of them. A first file whose reflection
+column holds nothing but padding wins that choice all the same and leaves
+the series with no ticks at all, so put a well refined pattern first.
 
 Run it from the repository root, with the exports already in data/::
 
@@ -162,11 +164,12 @@ def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
     winning. 'labels' overrides the SERIES_LABELS constant for this call.
 
     The reflection positions and the phase colour overrides come back
-    separately, from the first file that has any reflections, since one row
-    of ticks per phase is drawn for the series rather than one per sample,
-    and its colours are what the tick row is drawn in. A file that cannot be
-    read stops the run: a series figure silently missing a member is worse
-    than no figure.
+    separately, from the first file that carries a reflection column, since
+    one row of ticks per phase is drawn for the series rather than one per
+    sample, and its colours are what the tick row is drawn in. That file
+    wins the choice on having the column, not on the column holding a
+    position worth drawing. A file that cannot be read stops the run: a
+    series figure silently missing a member is worse than no figure.
 
     >>> load_series([], Path("data"), Path("nowhere.csv"))
     ([], {}, {})

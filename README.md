@@ -134,9 +134,10 @@ matplotlib defaults rather than on one figure, so anything else you draw in
 the same kernel is set in that face too.
 
 For a series of samples, [`make_series.py`](make_series.py) draws one figure
-instead of several: the observed patterns alone, each rescaled to the same
-height and offset above the one below, in the order you list in `SERIES` at
-the top of the script. Run it with `python make_series.py`. Rescaling per
+instead of several: the observed patterns and the reflection ticks, without
+the fit or the residual, each pattern rescaled to the same height and
+offset above the one below, in the order you list in `SERIES` at the top of
+the script. Run it with `python make_series.py`. Rescaling per
 trace is what keeps a weak sample visible beside a strong one, and it is
 also why no height in that figure may be compared with another.
 
