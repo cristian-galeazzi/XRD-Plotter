@@ -5,6 +5,7 @@ matplotlib.use("Agg")  # no display in CI, same as test_xrd_plotter.py
 
 import numpy as np
 import pytest
+from matplotlib.colors import to_rgba
 from matplotlib.pyplot import close as plt_close
 
 import make_series as ms
@@ -29,20 +30,54 @@ def test_a_flat_pattern_sits_on_its_baseline_instead_of_becoming_nan():
     assert np.array_equal(traces[0], np.zeros(3))
 
 
+def test_a_scope_sets_the_range_instead_of_the_whole_pattern():
+    # Only the first two points set the range; the third, a tall value the
+    # window would crop, must not flatten the visible part of the trace.
+    pattern = np.array([0.0, 2.0, 100.0])
+    scope = np.array([True, True, False])
+    stacked = ms.stack([pattern], offset=0.0, scopes=[scope])[0]
+    assert stacked[:2].tolist() == [0.0, 1.0]
+    assert stacked[2] > 1.0  # outside the scope, left to be cropped by xlim
+
+
 HEADER = "2theta;Obs;Calc;Bkg;diff/sigma;Phase 1"
 
 
-def write_export(path, peak_at, height):
+def write_export(path, peak_at, height, second_phase=None):
     """A synthetic GSAS-II publication export: one peak on a flat background.
 
     The reflection column holds one position and is padded, so the parser
-    reads it as a phase rather than as a data column.
+    reads it as a phase rather than as a data column. 'second_phase' adds a
+    second reflection column when given, for tests that need a second row.
     """
     angles = np.arange(10.0, 50.0, 0.5)
     obs = 100.0 + height * np.exp(-((angles - peak_at) ** 2) / 0.5)
-    lines = [HEADER]
+    header = HEADER + (";Phase 2" if second_phase is not None else "")
+    lines = [header]
     for i, (angle, value) in enumerate(zip(angles, obs)):
         reflection = f"{peak_at:.2f}" if i == 0 else ""
+        row = f"{angle:.2f};{value:.4f};{value:.4f};100.0;0.1;{reflection}"
+        if second_phase is not None:
+            row += f";{second_phase:.2f}" if i == 0 else ";"
+        lines.append(row)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_export_two_peaks(path, near_peak, near_height, far_peak,
+                           far_height):
+    """A synthetic export with two peaks, one meant to sit outside a window.
+
+    The reflection column snaps to near_peak, so a guide or tick test can
+    still use it; far_peak exists only to distort a normalisation that looks
+    at the whole pattern instead of the plotted window.
+    """
+    angles = np.arange(10.0, 50.0, 0.5)
+    obs = (100.0
+          + near_height * np.exp(-((angles - near_peak) ** 2) / 0.5)
+          + far_height * np.exp(-((angles - far_peak) ** 2) / 0.5))
+    lines = [HEADER]
+    for i, (angle, value) in enumerate(zip(angles, obs)):
+        reflection = f"{near_peak:.2f}" if i == 0 else ""
         lines.append(f"{angle:.2f};{value:.4f};{value:.4f};100.0;0.1;"
                      f"{reflection}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -60,7 +95,7 @@ def series(tmp_path):
 
 
 def test_every_named_file_becomes_one_trace(series, tmp_path):
-    traces, phases = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     assert len(traces) == 3
     assert phases, "the reflection column should be read as a phase"
@@ -72,14 +107,14 @@ def test_a_missing_file_stops_the_run_and_names_itself(series, tmp_path):
 
 
 def test_the_trace_label_falls_back_to_the_file_stem(series, tmp_path):
-    traces, _ = ms.load_series(["s2.csv"], series,
+    traces, _, _colors = ms.load_series(["s2.csv"], series,
                                tmp_path / "absent_metadata.csv")
     assert traces[0][2] == "s2"
 
 
 def test_the_figure_carries_one_line_and_one_label_per_sample(series,
                                                               tmp_path):
-    traces, phases = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
@@ -91,7 +126,7 @@ def test_the_figure_carries_one_line_and_one_label_per_sample(series,
 def test_the_strongest_sample_does_not_overrun_the_trace_above(series,
                                                               tmp_path):
     """s3 scatters many times harder than s1; normalisation must hide that."""
-    traces, phases = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.5)
     tops = [float(line.get_ydata().max()) for line in fig.axes[0].lines]
@@ -100,7 +135,7 @@ def test_the_strongest_sample_does_not_overrun_the_trace_above(series,
 
 
 def test_the_intensity_axis_carries_no_numbers(series, tmp_path):
-    traces, phases = ms.load_series(["s1.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
@@ -118,7 +153,7 @@ def write_metadata(path, filename, formula):
 def test_a_written_label_wins_over_the_metadata_formula(series, tmp_path):
     meta = tmp_path / "meta.csv"
     write_metadata(meta, "s1.csv", "Formula From Metadata")
-    traces, _ = ms.load_series(["s1.csv"], series, meta,
+    traces, _, _colors = ms.load_series(["s1.csv"], series, meta,
                                labels={"s1.csv": "Label I Wrote"})
     assert traces[0][2] == "Label I Wrote"
 
@@ -127,12 +162,12 @@ def test_without_a_written_label_the_metadata_formula_is_used(series,
                                                               tmp_path):
     meta = tmp_path / "meta.csv"
     write_metadata(meta, "s1.csv", "Formula From Metadata")
-    traces, _ = ms.load_series(["s1.csv"], series, meta, labels={})
+    traces, _, _colors = ms.load_series(["s1.csv"], series, meta, labels={})
     assert traces[0][2] == "Formula From Metadata"
 
 
 def test_a_label_written_for_another_file_does_not_leak(series, tmp_path):
-    traces, _ = ms.load_series(["s1.csv"], series,
+    traces, _, _colors = ms.load_series(["s1.csv"], series,
                                tmp_path / "absent_metadata.csv",
                                labels={"s2.csv": "Label I Wrote"})
     assert traces[0][2] == "s1"
@@ -143,7 +178,7 @@ def test_the_module_ships_no_labels_of_its_own():
 
 
 def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
-    traces, phases = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.35)
     placed = {text.get_text(): text.get_position()[1]
@@ -155,7 +190,7 @@ def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
 
 
 def test_the_labels_are_right_aligned_inside_the_frame(series, tmp_path):
-    traces, phases = ms.load_series(["s1.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     label = fig.axes[0].texts[0]
@@ -165,7 +200,7 @@ def test_the_labels_are_right_aligned_inside_the_frame(series, tmp_path):
 
 
 def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
-    traces, phases = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.35)
     ax = fig.axes[0]
@@ -176,7 +211,7 @@ def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
 
 
 def test_the_phase_legend_has_no_frame(series, tmp_path):
-    traces, phases = ms.load_series(["s1.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     assert fig.axes[0].get_legend().get_frame_on() is False
@@ -202,7 +237,7 @@ def test_a_guide_is_drawn_at_the_reflection_not_at_the_typed_value(
     # The first file's only reflection sits at 20.0; 20.2 is inside the
     # default 0.3 tolerance, so the guide must land on 20.0.
     monkeypatch.setattr(ms, "GUIDE_LINES", [20.2])
-    traces, phases = ms.load_series(["s1.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     guides = [line for line in fig.axes[0].lines
@@ -215,7 +250,7 @@ def test_a_guide_is_drawn_at_the_reflection_not_at_the_typed_value(
 def test_a_guide_with_no_reflection_near_it_is_reported_and_not_drawn(
         series, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(ms, "GUIDE_LINES", [24.0])
-    traces, phases = ms.load_series(["s1.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     guides = [line for line in fig.axes[0].lines
@@ -226,7 +261,7 @@ def test_a_guide_with_no_reflection_near_it_is_reported_and_not_drawn(
 
 
 def test_no_guides_are_drawn_by_default(series, tmp_path):
-    traces, phases = ms.load_series(["s1.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     assert [line for line in fig.axes[0].lines
@@ -237,7 +272,7 @@ def test_no_guides_are_drawn_by_default(series, tmp_path):
 def test_the_ticks_are_taller_than_the_traces_are_apart_is_not_the_case(
         series, tmp_path):
     """A tick row must fit under the bottom trace without reaching it."""
-    traces, phases = ms.load_series(["s1.csv"], series,
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.35)
     ax = fig.axes[0]
@@ -248,4 +283,88 @@ def test_the_ticks_are_taller_than_the_traces_are_apart_is_not_the_case(
     assert ax.get_ylim()[0] < min(
         np.array(s)[:, 1].min()
         for s in tick_collection.get_segments()), "the ticks are clipped"
+    plt_close(fig)
+
+
+def test_the_window_not_the_off_window_peak_sets_the_normalisation(
+        tmp_path, monkeypatch):
+    """A tall peak outside the window must not flatten the trace inside it."""
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "plain.csv", peak_at=20.0, height=50.0)
+    write_export_two_peaks(folder / "loaded.csv", near_peak=20.0,
+                           near_height=50.0, far_peak=45.0, far_height=8000.0)
+    monkeypatch.setattr(ms, "PLOT_X_MIN", 15.0)
+    monkeypatch.setattr(ms, "PLOT_X_MAX", 25.0)
+    traces, phases, _colors = ms.load_series(["plain.csv", "loaded.csv"],
+                                    folder, tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    tops = []
+    for line in fig.axes[0].lines:
+        theta, values = line.get_xdata(), line.get_ydata()
+        visible = (theta >= 15.0) & (theta <= 25.0)
+        tops.append(float(values[visible].max() - values[visible].min()))
+    # Without the fix 'loaded' is stretched flat by its off-window peak at
+    # 45 deg and its visible span collapses far below 1.0.
+    assert tops[1] > 0.9, "the visible peak should reach close to full span"
+    assert tops[0] == pytest.approx(tops[1], abs=0.05), (
+        "an off-window peak must not change how tall the two samples "
+        "compare inside the window")
+    plt_close(fig)
+
+
+def test_a_metadata_colour_reaches_the_tick_row(series, tmp_path):
+    meta = tmp_path / "meta.csv"
+    meta.write_text("filename;phase 1_color\ns1.csv;#123456\n",
+                    encoding="utf-8")
+    traces, phases, colors = ms.load_series(["s1.csv"], series, meta)
+    fig = ms.plot_series(traces, phases, colors=colors)
+    tick_collection = fig.axes[0].collections[0]
+    assert tuple(tick_collection.get_color()[0]) == to_rgba("#123456")
+    plt_close(fig)
+
+
+def test_the_legend_order_matches_the_tick_row_order_not_the_column_order(
+        tmp_path):
+    """The export lists Phase 2 before Phase 1; the legend must not follow."""
+    folder = tmp_path / "data"
+    folder.mkdir()
+    path = folder / "reversed.csv"
+    angles = np.arange(10.0, 50.0, 0.5)
+    obs = 100.0 + 900.0 * np.exp(-((angles - 20.0) ** 2) / 0.5)
+    lines = ["2theta;Obs;Calc;Bkg;diff/sigma;Phase 2;Phase 1"]
+    for i, (angle, value) in enumerate(zip(angles, obs)):
+        phase2 = "30.00" if i == 0 else ""
+        phase1 = "20.00" if i == 0 else ""
+        lines.append(f"{angle:.2f};{value:.4f};{value:.4f};100.0;0.1;"
+                     f"{phase2};{phase1}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    traces, phases, colors = ms.load_series(["reversed.csv"], folder,
+                                            tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases, colors=colors)
+    legend_labels = [t.get_text()
+                     for t in fig.axes[0].get_legend().get_texts()]
+    assert legend_labels == ["Phase 1", "Phase 2"]
+    plt_close(fig)
+
+
+def test_the_second_tick_row_sits_one_pitch_below_the_first(tmp_path):
+    """A two-phase export must exercise the second and later tick rows."""
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
+    traces, phases, _colors = ms.load_series(["two.csv"], folder,
+                                    tmp_path / "absent_metadata.csv")
+    offset = 1.35
+    fig = ms.plot_series(traces, phases, offset=offset)
+    ax = fig.axes[0]
+    assert len(ax.collections) == 2, "both phase columns should draw a row"
+    bottoms = [np.array(c.get_segments()[0])[:, 1].min()
+              for c in ax.collections]
+    tops = [np.array(c.get_segments()[0])[:, 1].max()
+           for c in ax.collections]
+    pitch = (ms.TICK_HEIGHT + 0.02) * offset
+    assert bottoms[0] - bottoms[1] == pytest.approx(pitch)
+    assert tops[1] < bottoms[0], "the second row overlaps the first"
+    assert ax.get_ylim()[0] < bottoms[1], "the second row is clipped"
     plt_close(fig)

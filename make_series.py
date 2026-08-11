@@ -87,14 +87,21 @@ OUTPUT_BASENAME = "series_XRD_stacked"
 LINEWIDTH_TRACE = 0.9
 
 
-def stack(patterns: list[np.ndarray],
-          offset: float = OFFSET) -> list[np.ndarray]:
+def stack(patterns: list[np.ndarray], offset: float = OFFSET,
+          scopes: list[np.ndarray] | None = None) -> list[np.ndarray]:
     """Rescale every pattern to a 0 to 1 span, then lift each by its index.
 
     Rescaling is per pattern, so a weakly scattering sample is drawn as tall
     as a strong one and no trace climbs into the one above it. Heights are
     therefore not comparable between traces, and the caption of the figure
     has to say so.
+
+    'scopes' names, per pattern, the points that set the 0 to 1 range: a
+    boolean mask matching the 2theta window actually plotted, so a
+    reflection outside that window does not set the span of a trace whose
+    only visible part is a small one. Omitted, the whole pattern sets it, as
+    before. A point outside the scope can land above 1.0 or below 0.0; that
+    is correct, since set_xlim crops it before it is drawn.
 
     >>> [t.tolist() for t in stack([np.array([0.0, 2.0]),
     ...                             np.array([1.0, 3.0])], 1.0)]
@@ -104,8 +111,9 @@ def stack(patterns: list[np.ndarray],
     """
     stacked = []
     for index, values in enumerate(patterns):
-        low = float(np.nanmin(values))
-        span = float(np.nanmax(values)) - low
+        scope = values[scopes[index]] if scopes is not None else values
+        low = float(np.nanmin(scope))
+        span = float(np.nanmax(scope)) - low
         # A pattern with no span has nothing to normalise by. It is drawn on
         # its own baseline rather than divided by zero into NaN, which would
         # take the trace out of the figure without saying anything.
@@ -136,25 +144,28 @@ def snap_to_reflection(value: float, positions: np.ndarray,
 def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
                 labels: dict[str, str] | None = None
                 ) -> tuple[list[tuple[np.ndarray, np.ndarray, str]],
-                           dict[str, np.ndarray]]:
+                           dict[str, np.ndarray], dict[str, str]]:
     """Read the series in order: (2theta, observed, label) per file.
 
     The label is what SERIES_LABELS says for that file name, or the
     'formula' cell of its metadata row, or the file stem, first hit
     winning. 'labels' overrides the SERIES_LABELS constant for this call.
 
-    The reflection positions come back separately, from the first file that
-    has any, since one row of ticks per phase is drawn for the series rather
-    than one per sample. A file that cannot be read stops the run: a series
-    figure silently missing a member is worse than no figure.
+    The reflection positions and the phase colour overrides come back
+    separately, from the first file that has any reflections, since one row
+    of ticks per phase is drawn for the series rather than one per sample,
+    and its colours are what the tick row is drawn in. A file that cannot be
+    read stops the run: a series figure silently missing a member is worse
+    than no figure.
 
     >>> load_series([], Path("data"), Path("nowhere.csv"))
-    ([], {})
+    ([], {}, {})
     """
     overrides = SERIES_LABELS if labels is None else labels
     meta = xp.load_metadata(metadata_file)
     traces: list[tuple[np.ndarray, np.ndarray, str]] = []
     phases: dict[str, np.ndarray] = {}
+    colors: dict[str, str] = {}
 
     for filename in filenames:
         path = Path(data_folder) / filename
@@ -167,29 +178,48 @@ def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
             raise SystemExit(f"{filename}: {error}")
         theta, obs, _calc, _bkg, _resid, file_phases = xp.prepare_data(
             data, phase_cols, use_sqrt=USE_SQRT)
-        name, _pct, _colors, _window = xp.sample_info(meta, filename,
-                                                      path.stem)
+        name, _pct, file_colors, _window = xp.sample_info(meta, filename,
+                                                          path.stem)
         # get with a default rather than 'or': a label deliberately set to
         # an empty string stays empty instead of falling back.
         traces.append((theta, obs, overrides.get(filename, name)))
         if not phases:
             phases = file_phases
-    return traces, phases
+            colors = file_colors
+    return traces, phases, colors
 
 
 def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                 phases: dict[str, np.ndarray],
-                offset: float = OFFSET) -> Figure:
+                offset: float = OFFSET,
+                colors: dict[str, str] | None = None) -> Figure:
     """Draw the stacked series on one set of axes; returns the Figure.
 
     Typical use, after load_series::
 
-        traces, phases = load_series(SERIES, DATA_FOLDER, METADATA_FILE)
-        fig = plot_series(traces, phases)
+        traces, phases, colors = load_series(SERIES, DATA_FOLDER,
+                                             METADATA_FILE)
+        fig = plot_series(traces, phases, colors=colors)
     """
     fig, ax = plt.subplots(figsize=(xp.FIGURE_WIDTH, xp.FIGURE_HEIGHT),
                            dpi=110)
-    stacked = stack([obs for _theta, obs, _name in traces], offset)
+    # The window is set before stack() runs, so the 0 to 1 span of a trace
+    # is set by the part of the pattern the window actually shows, as
+    # xp.create_plot already does. A reflection outside the window would
+    # otherwise set the span of a trace whose visible part is much smaller,
+    # sinking its label and making two samples with different off-window
+    # peaks scale by different amounts, exactly the comparison the
+    # normalisation exists to prevent.
+    widest = xp.plot_window(np.concatenate([t for t, _o, _n in traces]),
+                            PLOT_X_MIN, PLOT_X_MAX)
+    x_low, x_high = widest
+    scopes = []
+    for theta, _obs, _name in traces:
+        visible = (theta >= x_low) & (theta <= x_high)
+        # A trace with nothing inside the window keeps its own full range
+        # rather than dividing by an empty slice.
+        scopes.append(visible if visible.any() else np.ones(len(theta), bool))
+    stacked = stack([obs for _theta, obs, _name in traces], offset, scopes)
 
     # Every trace in the same black. A colour per sample would be a second
     # scale to decode, and the vertical position already says which sample
@@ -210,7 +240,8 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
 
     labels = {phase: xp.phase_label(phase) for phase in phases}
     ordered = sorted(phases, key=lambda phase: labels[phase])
-    tick_colors = xp.phase_colors([labels[phase] for phase in ordered])
+    tick_colors = xp.phase_colors([labels[phase] for phase in ordered],
+                                  colors)
     rows = 0
     pitch = (TICK_HEIGHT + 0.02) * offset  # 0.02 of clearance between rows
     # The tick block hangs below the bottom trace by 0.05 of a trace height,
@@ -235,7 +266,9 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         # Guides span the full height of the axes, behind the black traces,
         # so a tick can be followed up to the peak it belongs to. axvline
         # works in axes fractions vertically, so it does not depend on the
-        # limits being set yet.
+        # limits being set yet. Nested under SHOW_TICKS: a guide exists only
+        # to connect a tick to a peak, so with the ticks off there is
+        # nothing left for it to point at.
         reflections = (np.concatenate(drawn) if drawn else np.array([]))
         for value in GUIDE_LINES:
             snapped = snap_to_reflection(value, reflections, GUIDE_SNAP)
@@ -245,18 +278,26 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                 continue
             ax.axvline(snapped, color=xp.COLOR_BKG, ls=":", lw=1.0, zorder=1)
         if rows:
-            ax.legend(handles=[Line2D([0], [0], color=tick_colors[label],
-                                      lw=3, label=label)
-                               for label in dict.fromkeys(labels.values())],
-                      loc="upper left", fontsize=xp.FONT_SIZE_LEGEND,
-                      frameon=False)
+            # Built from 'ordered', the order the tick rows are drawn in,
+            # not from the column order of the export: a reader pairs a
+            # legend entry to a row by position, and with three or more
+            # phases the two orders need not agree.
+            seen: set[str] = set()
+            handles = []
+            for phase in ordered:
+                label = labels[phase]
+                if label in seen:
+                    continue
+                seen.add(label)
+                handles.append(Line2D([0], [0], color=tick_colors[label],
+                                      lw=3, label=label))
+            ax.legend(handles=handles, loc="upper left",
+                      fontsize=xp.FONT_SIZE_LEGEND, frameon=False)
 
     ax.set_xlabel(r"$2\theta\:/\:^\circ$", fontsize=xp.FONT_SIZE_LABEL)
     ax.set_ylabel(r"$\sqrt{\mathrm{Intensity}}$ / a.u." if USE_SQRT
                   else r"Intensity / a.u.", fontsize=xp.FONT_SIZE_LABEL,
                   labelpad=10)
-    widest = xp.plot_window(np.concatenate([t for t, _o, _n in traces]),
-                            PLOT_X_MIN, PLOT_X_MAX)
     ax.set_xlim(*widest)
     ax.set_ylim(bottom=(block_top - (rows - 0.5) * pitch
                         if rows else -0.05 * offset),
@@ -277,10 +318,10 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
 
 def main() -> None:
     """Read SERIES, draw it and write the two files under OUTPUT_FOLDER."""
-    traces, phases = load_series(SERIES, DATA_FOLDER, METADATA_FILE)
+    traces, phases, colors = load_series(SERIES, DATA_FOLDER, METADATA_FILE)
     if not traces:
         raise SystemExit("SERIES is empty, nothing to draw")
-    fig = plot_series(traces, phases)
+    fig = plot_series(traces, phases, colors=colors)
     base = xp.save_figure(fig, OUTPUT_FOLDER, OUTPUT_BASENAME)
     print(f"wrote {OUTPUT_FOLDER}/pdf/{base}.pdf "
           f"and {OUTPUT_FOLDER}/png/{base}.png")
