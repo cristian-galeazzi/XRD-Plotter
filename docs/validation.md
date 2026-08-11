@@ -97,6 +97,8 @@ floor the README claims and on the version this is developed with.
 | The per-trace rescaling of the stack | Every pattern normalised to its own span inside the plotted window, so an off-window peak cannot flatten a trace, and a flat pattern sitting on its baseline instead of becoming NaN |
 | The stacked figure's labels, ticks and guides | One label per trace at its own height, a guide snapping to a real reflection and taking the colour of the phase that owns it, a value with nothing near it reported and not drawn, and a phase with no reflection in the window getting neither tick row nor legend entry |
 | Every appearance setting given to `plot_series` per call | The argument winning over the module constant, and the module constant used when the caller passes nothing, so the notebook drives a redraw without writing to module state |
+| The reflection ticks turned off | The rows and their legend gone, the guides still drawn and the reflection list still printed, so a control set on purpose is not dropped along with another |
+| No 2θ setting tuned in the committed script | `GUIDE_LINES`, `PLOT_X_MIN`, `PLOT_X_MAX` and `LABEL_X` read out of the source file rather than off the imported module, so the fixture pinning the shipped values cannot hide a measured position on its way into a commit |
 
 ## What validation does not cover
 

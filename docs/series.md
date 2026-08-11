@@ -49,10 +49,10 @@ Full reference for the file: [the metadata reference](metadata.md).
 
 ## The settings
 
-Every one of them is a control in section 5, a constant at the top of
-`make_series.py`, and a keyword argument of `plot_series`. The three are the
-same setting reached three ways: a control left blank falls back to the
-constant, and so does an argument left out.
+Every one of them, bar `GUIDE_SNAP`, is a control in section 5, a constant
+at the top of `make_series.py`, and a keyword argument of `plot_series`. The
+three are the same setting reached three ways: a control left blank falls
+back to the constant, and so does an argument left out.
 
 Two units run through the table:
 
@@ -65,15 +65,15 @@ Widths are in points, matplotlib's own unit for a line.
 
 | Control | Constant | Default | What it does |
 |---|---|---|---|
-| 2θ from, 2θ to | `PLOT_X_MIN`, `PLOT_X_MAX` | measured range | The window every trace is drawn in. It also sets what each pattern is rescaled by, since a pattern is normalised over the part of it the window shows |
+| 2θ from, 2θ to | `PLOT_X_MIN`, `PLOT_X_MAX` | measured range | The window every trace is drawn in. It also sets what each pattern is rescaled by, since a pattern is normalised over the part of it the window shows. An end left unset falls back to `xp.PLOT_X_MIN`/`xp.PLOT_X_MAX`, and only then to the measured range, so a window set in section 3 reaches this figure too |
 | √ intensity | `USE_SQRT` | `True` | Square root of the intensity on the drawn copy, so weak reflections survive beside a strong one. The axis label and the output file name follow |
-| reflection ticks | `SHOW_TICKS` | `True` | One row of ticks per phase below the lowest trace. Off also silences the printed list of positions |
+| reflection ticks | `SHOW_TICKS` | `True` | One row of ticks per phase below the lowest trace, and the legend that names them. Off hides those two and nothing else: the guides are still drawn and the list of positions still printed |
 | trace spacing | `OFFSET` | `1.35` | Baseline to baseline, in trace heights. At 1.0 a pattern touches the one above; higher spreads them out |
 | trace width | `LINEWIDTH_TRACE` | `0.9` | Width of a pattern line. A whole series much thicker reads as a solid block |
 | label height | `LABEL_HEIGHT` | `0.90` | How high a trace's name sits above its own baseline, in trace heights, so 1.0 is the top of the pattern. Keep it under the trace spacing, or the name lands on the trace above |
 | label 2θ | `LABEL_X` | left border | Where a name starts, measured from its left edge. Unset pins every name just inside the left border, whatever window is drawn |
 | label weight | `LABEL_WEIGHT` | `normal` | `normal`, `medium`, `semibold` or `bold`. A heavier name separates itself from the pattern it sits over without a box behind it |
-| tick height | `TICK_HEIGHT` | `0.10` | Height of one reflection tick, in trace heights. The rows sit `TICK_HEIGHT + 0.02` apart, so raising it moves them apart instead of overlapping them |
+| tick height | `TICK_HEIGHT` | `0.10` | Height of one reflection tick, in trace heights, so it does not move when the trace spacing does. The rows sit `TICK_HEIGHT + 0.02` apart, so raising it moves them apart instead of overlapping them |
 | guides 2θ | `GUIDE_LINES` | none | Reflections to follow up through the stack. See below |
 | guide style | `GUIDE_STYLE` | `:` dotted | `:` dotted, `--` dashed, `-.` dash-dot, `-` solid |
 | guide width | `GUIDE_WIDTH` | `1.2` | Width of a guide. Past the width of the traces it crosses, a guide hides the peak it points at |
@@ -105,7 +105,9 @@ through. Each value you give snaps to the nearest real reflection, so a
 position read off a printed figure by eye still lands exactly on its tick,
 and each guide is drawn in the colour of the phase that owns the reflection
 it landed on. A value with nothing within `GUIDE_SNAP` degrees is reported
-and not drawn, rather than being drawn where no reflection is.
+and not drawn, rather than being drawn where no reflection is. Turning the
+ticks off does not turn the guides off: a guide carries a reflection up
+through the stack whether or not a tick marks it at the bottom.
 
 Do not read the positions off the picture. Every run prints the reflections
 in the window, one line per phase, and that list is what the guides should
@@ -116,6 +118,9 @@ reflections between 13 and 85 deg, to pick the guides from:
   Phase 1: 30.95, 35.89, 51.67, 61.46, 64.51, 76.08, 84.37
   Phase 2: 21.14, 30.07, 37.04, 43.04, 48.42, 53.39
 ```
+
+The list is printed whether or not the ticks are drawn, since it is what a
+guide value is picked from.
 
 A phase whose export carries two reflection columns has both listed together
 under one name, so a position can appear twice in its line.
@@ -137,16 +142,25 @@ under one name, so a position can appear twice in its line.
   missing one sample is worse than no figure, so the run names the file and
   stops instead of leaving a gap.
 
+## Where the figure is written
+
+`python make_series.py` writes `output/pdf/series_stacked_XRD_analysis_sqrt.pdf`
+and the matching PNG, and *Save PDF and PNG* in section 5 writes the same
+pair. `_linear` replaces `_sqrt` when the square root is off, so the two
+versions never overwrite each other. `OUTPUT_BASENAME` sets the first word.
+
 ## Privacy
 
 Nothing in `make_series.py` names a sample: membership, order and names all
 come from the metadata file, which is excluded from the repository.
 
-One exception, easy to miss because it sits among the appearance settings:
-**`GUIDE_LINES` holds 2θ positions read off your own patterns.** A reflection
-position is a measurement, it gives a lattice spacing through Bragg's law,
-and a handful of them identify the phase. Type the guides into section 5,
-where they stay in the widget, or empty the constant before committing.
+Four settings are the exception, easy to miss because they sit among the
+appearance ones. **Anything in degrees 2θ is a position read off your own
+patterns**: `GUIDE_LINES`, `PLOT_X_MIN`, `PLOT_X_MAX` and `LABEL_X`. A
+reflection position is a measurement, it gives a lattice spacing through
+Bragg's law, and a handful of them identify the phase. Set them in section 5,
+where they stay in the widget, and leave the constants as shipped. The test
+suite refuses a tuned one, so a forgotten setting fails before it is pushed.
 Everything else in that file is appearance and can be edited freely.
 
 Procedure: [the privacy reference](privacy.md).

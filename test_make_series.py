@@ -3,6 +3,9 @@ import matplotlib
 
 matplotlib.use("Agg")  # no display in CI, same as test_xrd_plotter.py
 
+import ast
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -356,11 +359,12 @@ def test_the_ticks_are_taller_than_the_traces_are_apart_is_not_the_case(
     tick_collection = ax.collections[0]
     tops = [segment[:, 1].max() for segment in
             [np.array(s) for s in tick_collection.get_segments()]]
-    # The tick row's own top sits at block_top + TICK_HEIGHT * offset,
-    # where block_top is -(TICK_HEIGHT + 0.05) * offset: the two cancel
-    # to -0.05 * offset, the clearance plot_series intends between the
-    # bottom trace's baseline at y=0 and the nearest tick.
-    expected_top = -0.05 * offset
+    # The tick row's own top sits at block_top + TICK_HEIGHT, where
+    # block_top is -(TICK_HEIGHT + 0.05): the two cancel to -0.05, the
+    # clearance plot_series intends between the bottom trace's baseline at
+    # y=0 and the nearest tick. In trace heights, so it does not move with
+    # the offset.
+    expected_top = -0.05
     assert max(tops) == pytest.approx(expected_top), (
         "the ticks reach into the bottom trace")
     assert ax.get_ylim()[0] < min(
@@ -514,7 +518,7 @@ def test_the_second_tick_row_sits_one_pitch_below_the_first(tmp_path):
               for c in ax.collections]
     tops = [np.array(c.get_segments()[0])[:, 1].max()
            for c in ax.collections]
-    pitch = (ms.TICK_HEIGHT + 0.02) * offset
+    pitch = ms.TICK_HEIGHT + 0.02
     assert bottoms[0] - bottoms[1] == pytest.approx(pitch)
     assert tops[1] < bottoms[0], "the second row overlaps the first"
     assert ax.get_ylim()[0] < bottoms[1], "the second row is clipped"
@@ -613,17 +617,34 @@ def test_the_label_weight_reaches_the_drawn_text(series, tmp_path,
     plt_close(fig)
 
 
-def test_the_sqrt_and_linear_variants_do_not_share_an_output_name():
+def test_the_sqrt_and_linear_variants_do_not_share_an_output_name(
+        monkeypatch, series):
     """main() must pick the output name up from xp.output_basename.
 
     A fixed OUTPUT_BASENAME passed straight to xp.save_figure would write
     both USE_SQRT settings to the same PDF and PNG, the sqrt run silently
-    overwriting the linear one or the other way round.
+    overwriting the linear one or the other way round. Driven through main()
+    rather than by calling xp.output_basename twice here, which would assert
+    something about xrd_plotter and nothing about this script.
     """
-    sqrt_name = xp.output_basename(ms.OUTPUT_BASENAME, True, weighted=True)
-    linear_name = xp.output_basename(ms.OUTPUT_BASENAME, False,
-                                     weighted=True)
-    assert sqrt_name != linear_name
+    meta = pd.DataFrame({"series_order": ["1"]},
+                        index=pd.Index(["s1.csv"], name="filename"))
+    monkeypatch.setattr(xp, "load_metadata", lambda _path: meta)
+    monkeypatch.setattr(ms, "DATA_FOLDER", series)
+    written = []
+
+    def record(fig, _folder, base):
+        written.append(base)
+        plt_close(fig)  # main() hands its figure to save_figure and forgets
+        return base
+
+    monkeypatch.setattr(xp, "save_figure", record)
+    for use_sqrt in (True, False):
+        monkeypatch.setattr(ms, "USE_SQRT", use_sqrt)
+        ms.main()
+    assert len(written) == 2
+    assert written[0] != written[1], (
+        "both USE_SQRT settings write to the same file")
 
 
 def write_series_metadata(path, rows):
@@ -870,3 +891,67 @@ def test_the_trace_width_reaches_every_drawn_trace(series):
     assert len(solid) == 2
     assert all(line.get_linewidth() == 2.0 for line in solid)
     plt_close(fig)
+
+
+def test_the_guides_survive_the_ticks_being_turned_off(series, capsys):
+    """SHOW_TICKS hides the rows and the legend, and nothing else.
+
+    A guide carries a reflection up through the stack, which is worth doing
+    whether or not a tick marks it at the bottom. Dropping the guides along
+    with the ticks would take away, in silence, a control the reader set on
+    purpose.
+    """
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, show_ticks=False,
+                         guide_lines=[20.1], guide_style=":")
+    ax = fig.axes[0]
+    assert len(ax.collections) == 0, "no tick row should be drawn"
+    assert ax.get_legend() is None, "no legend without the rows it names"
+    guides = [line for line in ax.lines
+              if line.get_linestyle() in (":", "dotted")]
+    assert len(guides) == 1, "the guide went away with the ticks"
+    # The list is what a guide value is picked from, so it has to survive too.
+    assert "to pick the guides from" in capsys.readouterr().out
+    plt_close(fig)
+
+
+def shipped_setting(name):
+    """One module-level constant as the repository's own file assigns it.
+
+    Read from the source, not from the imported module: the autouse fixture
+    above pins every setting to its shipped value, so an assertion about
+    ms.NAME would pass on a working copy that carries a tuned one, which is
+    exactly the copy a commit is made from.
+    """
+    source = Path(ms.__file__).read_text(encoding="utf-8")
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        elif isinstance(node, ast.Assign):
+            targets = node.targets
+        else:
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id == name:
+                return ast.literal_eval(node.value)
+    raise AssertionError(f"{name} is no longer assigned in make_series.py")
+
+
+def test_no_setting_in_degrees_is_about_to_be_committed():
+    """The four settings in degrees 2theta must ship unset.
+
+    A position in degrees is a measurement, not a preference: it gives a
+    lattice spacing through Bragg's law and a handful of them identify the
+    phase. This is the gate that keeps a tuned one out of a commit, and it
+    reads the file rather than the module so the fixture cannot hide it.
+    See docs/privacy.md.
+    """
+    unset = {"GUIDE_LINES": [], "PLOT_X_MIN": None, "PLOT_X_MAX": None,
+             "LABEL_X": None}
+    tuned = {name: shipped_setting(name) for name, blank in unset.items()
+             if shipped_setting(name) != blank}
+    assert not tuned, (
+        f"{tuned} carries a measured 2theta position. Empty it before "
+        "committing, or set it in section 5 of the notebook, where it "
+        "stays in the widget. See docs/privacy.md")

@@ -161,6 +161,10 @@ settings, and each one is a control in section 5, a constant at the top of
 the script and an argument of `plot_series` at the same time. The table of
 all of them, with units and defaults: [docs/series.md](docs/series.md).
 
+Four of those settings are in degrees 2θ, which makes them measurements
+rather than preferences. Leave them as shipped and set them in section 5:
+[docs/privacy.md](docs/privacy.md) says why, and the test suite enforces it.
+
 ## Settings
 
 The engine lives in [`xrd_plotter.py`](xrd_plotter.py) and the notebook

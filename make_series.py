@@ -54,6 +54,14 @@ import xrd_plotter as xp
 #                    from its own baseline to its tallest reflection, so
 #                    0.5 is half a pattern tall, wherever it sits
 # Widths are in points, matplotlib's own unit for a line.
+#
+# One warning runs through the whole block. A setting in degrees 2theta is
+# not a preference: it is a position you read off your own patterns, and a
+# few of them give a lattice spacing through Bragg's law and identify the
+# phase. That is PLOT_X_MIN, PLOT_X_MAX, LABEL_X and GUIDE_LINES, each
+# marked again where it stands. Leave them as shipped and set them in
+# section 5 of the notebook, where they stay in the widget, or per sample in
+# the metadata file. See docs/privacy.md.
 
 # --- The traces ---------------------------------------------------------
 # Vertical distance from one trace's baseline to the next, in trace
@@ -84,6 +92,10 @@ USE_SQRT = True
 # the traces comparable, so prefer setting both. It also sets what each
 # trace is rescaled by, since a pattern is normalised over the part of it
 # the window shows.
+#
+# In degrees, so a window fixed here is measured data: a pair framing the
+# reflection the series is about says where that reflection is. Set it in
+# section 5, or per sample through the 'x_min'/'x_max' metadata columns.
 PLOT_X_MIN: float | None = None
 PLOT_X_MAX: float | None = None
 
@@ -99,6 +111,10 @@ LABEL_HEIGHT = 0.90
 # just inside the left border, whatever window is drawn, which is the only
 # default that works without knowing the range:
 #   LABEL_X = 14.0
+#
+# In degrees, so a value here is chosen against your own pattern: it names
+# an empty stretch of your figure, which says where the reflections are not.
+# Weaker than a window, but it is still a position. Set it in section 5.
 LABEL_X: float | None = None
 
 # Weight of the trace labels: 'normal', 'medium', 'semibold' or 'bold'.
@@ -109,15 +125,16 @@ LABEL_WEIGHT = "normal"
 
 # --- The reflection ticks -----------------------------------------------
 # One row of ticks per phase, below the bottom trace, in the colours the
-# per-sample figures use. False draws the traces alone, and also silences
-# the printed reflection list, the tool for picking guide positions, since
-# with no ticks drawn there is nothing to list.
+# per-sample figures use. False hides those rows and the legend that names
+# them, and nothing else: the reflection list is still printed and the
+# guides are still drawn, since a guide carries a reflection up through the
+# stack whether or not a tick marks it at the bottom.
 SHOW_TICKS = True
 
-# Height of one tick, in trace heights, so 0.10 is a tenth of a pattern.
-# Taller ticks are easier to follow across a wide pattern. The rows sit one
-# TICK_HEIGHT + 0.02 apart, so raising this moves them apart instead of
-# overlapping them.
+# Height of one tick, in trace heights, so 0.10 is a tenth of a pattern and
+# does not change when OFFSET does. Taller ticks are easier to follow across
+# a wide pattern. The rows sit one TICK_HEIGHT + 0.02 apart, so raising this
+# moves them apart instead of overlapping them.
 TICK_HEIGHT = 0.10
 
 # --- The guides -----------------------------------------------------
@@ -130,10 +147,10 @@ TICK_HEIGHT = 0.10
 # reflection it landed on:
 #   GUIDE_LINES = [30.9, 37.0]
 #
-# The one setting in this file that carries data rather than a preference: a
-# reflection position is a measurement, and a few of them identify the
-# phase. Empty it before committing, or set the guides in section 5 of the
-# notebook, where they stay in the widget. See docs/privacy.md.
+# The sharpest of the four settings in degrees: a guide sits exactly on a
+# reflection, so a filled list is a measured peak table. Empty it before
+# committing, or set the guides in section 5 of the notebook, where they
+# stay in the widget. See docs/privacy.md.
 GUIDE_LINES: list[float] = []
 
 # How far a GUIDE_LINES value may sit from a reflection and still snap to
@@ -159,10 +176,12 @@ GUIDE_WIDTH = 1.2
 DATA_FOLDER = Path("data")
 METADATA_FILE = Path("Samples_metadata.csv")
 OUTPUT_FOLDER = Path("output")
-OUTPUT_BASENAME = "series_XRD_stacked"
+# Start of the output file name. xp.output_basename appends the rest, so
+# this ships as 'series_stacked_XRD_analysis_sqrt.pdf' and its .png.
+OUTPUT_BASENAME = "series_stacked"
 
 
-def stack(patterns: list[np.ndarray], offset: float = OFFSET,
+def stack(patterns: list[np.ndarray], offset: float | None = None,
           scopes: list[np.ndarray] | None = None) -> list[np.ndarray]:
     """Rescale every pattern to a 0 to 1 span, then lift each by its index.
 
@@ -184,6 +203,10 @@ def stack(patterns: list[np.ndarray], offset: float = OFFSET,
     >>> stack([np.array([5.0, 5.0])], 1.0)[0].tolist()
     [0.0, 0.0]
     """
+    # Resolved here, not in the signature: a default evaluated at import
+    # would freeze the setting as it stood then, so a caller that raised
+    # OFFSET afterwards would still be stacked at the shipped one.
+    offset = OFFSET if offset is None else offset
     stacked = []
     for index, values in enumerate(patterns):
         scope = values[scopes[index]] if scopes is not None else values
@@ -198,7 +221,7 @@ def stack(patterns: list[np.ndarray], offset: float = OFFSET,
 
 
 def snap_to_reflection(value: float, positions: np.ndarray,
-                       tolerance: float = GUIDE_SNAP) -> float | None:
+                       tolerance: float | None = None) -> float | None:
     """The reflection position nearest to value, or None past the tolerance.
 
     A guide line is worth drawing only where a reflection actually is, so a
@@ -210,6 +233,7 @@ def snap_to_reflection(value: float, positions: np.ndarray,
     >>> snap_to_reflection(31.0, np.array([20.0, 37.04]), 0.3) is None
     True
     """
+    tolerance = GUIDE_SNAP if tolerance is None else tolerance
     if not len(positions):
         return None
     nearest = float(positions[np.argmin(np.abs(positions - value))])
@@ -217,7 +241,7 @@ def snap_to_reflection(value: float, positions: np.ndarray,
 
 
 def snap_to_phase(value: float, rows: dict[str, np.ndarray],
-                  tolerance: float = GUIDE_SNAP
+                  tolerance: float | None = None
                   ) -> tuple[float | None, str | None]:
     """The nearest reflection across the phases, and the phase it belongs to.
 
@@ -233,6 +257,7 @@ def snap_to_phase(value: float, rows: dict[str, np.ndarray],
     >>> snap_to_phase(27.0, rows, 0.3)
     (None, None)
     """
+    tolerance = GUIDE_SNAP if tolerance is None else tolerance
     best: tuple[float | None, str | None] = (None, None)
     smallest = tolerance
     for label, positions in rows.items():
@@ -445,6 +470,12 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         label_x = LABEL_X
     left_border = label_x is None or label_x != label_x
 
+    # Guarded here rather than left to np.concatenate below, which answers an
+    # empty series with 'need at least one array to concatenate'. This is a
+    # public entry point, so it says what the caller actually got wrong.
+    if not traces:
+        raise ValueError("no traces to draw: the series is empty")
+
     fig, ax = plt.subplots(figsize=(xp.FIGURE_WIDTH, xp.FIGURE_HEIGHT),
                            dpi=110)
     # The window is set before stack() runs, so the 0 to 1 span of a trace
@@ -500,70 +531,73 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     tick_colors = xp.phase_colors([labels[phase] for phase in ordered],
                                   colors)
     rows = 0
-    pitch = (tick_height + 0.02) * offset  # 0.02 of clearance between rows
+    pitch = tick_height + 0.02  # 0.02 of a trace height between rows
     # The tick block hangs below the bottom trace by 0.05 of a trace height,
     # whatever tick_height is. Derived from it rather than written out again,
     # so a taller tick moves the block down instead of growing into the
     # pattern above it.
-    block_top = -(tick_height + 0.05) * offset
+    block_top = -(tick_height + 0.05)
     listed: dict[str, np.ndarray] = {}
-    if show_ticks:
-        for phase in ordered:
-            locations = reflections_in_window(phases[phase], widest)
-            if len(locations):
-                row_y = block_top - rows * pitch
-                ax.vlines(locations, row_y, row_y + tick_height * offset,
-                          colors=tick_colors[labels[phase]],
-                          lw=xp.LINEWIDTH_TICKS, zorder=3)
-                # Two columns can carry the same phase name, and the legend
-                # gives them one entry between them. Their positions join
-                # instead of the second replacing the first, or the list and
-                # the guides would know about half the phase.
-                listed[labels[phase]] = (
-                    np.concatenate([listed[labels[phase]], locations])
-                    if labels[phase] in listed else locations)
-                rows += 1
+    # Collected whether or not the rows are drawn. The printed list is how a
+    # guide value is picked and the guides are what carry a reflection up
+    # through the stack, and neither needs a tick under the bottom trace to
+    # make sense: show_ticks hides the rows and the legend naming them, and
+    # nothing else.
+    for phase in ordered:
+        locations = reflections_in_window(phases[phase], widest)
+        if not len(locations):
+            continue
+        # Two columns can carry the same phase name, and the legend gives
+        # them one entry between them. Their positions join instead of the
+        # second replacing the first, or the list and the guides would know
+        # about half the phase.
+        listed[labels[phase]] = (
+            np.concatenate([listed[labels[phase]], locations])
+            if labels[phase] in listed else locations)
+        if show_ticks:
+            row_y = block_top - rows * pitch
+            ax.vlines(locations, row_y, row_y + tick_height,
+                      colors=tick_colors[labels[phase]],
+                      lw=xp.LINEWIDTH_TICKS, zorder=3)
+            rows += 1
 
-        # Printed so a guide value is picked from the reflections that are
-        # actually there rather than read off the drawn figure by eye.
-        if listed:
-            print(f"reflections between {widest[0]:g} and {widest[1]:g} deg, "
-                  "to pick the guides from:")
-            print(format_reflections(listed))
+    # Printed so a guide value is picked from the reflections that are
+    # actually there rather than read off the drawn figure by eye.
+    if listed:
+        print(f"reflections between {widest[0]:g} and {widest[1]:g} deg, "
+              "to pick the guides from:")
+        print(format_reflections(listed))
 
-        # Guides span the full height of the axes, in front of the black
-        # traces, drawn at zorder=4 above their zorder=2, so a guide behind
-        # a dense stack of patterns is not hidden by them and a tick can
-        # still be followed up to the peak it belongs to. axvline works in
-        # axes fractions vertically, so it does not depend on the limits
-        # being set yet. Nested under show_ticks: a guide exists only to
-        # connect a tick to a peak, so with the ticks off there is nothing
-        # left for it to point at.
-        for value in guide_lines:
-            snapped, owner = snap_to_phase(value, listed, guide_snap)
-            if snapped is None:
-                print(f"  ! no reflection within {guide_snap:g} deg of "
-                      f"{value:g}, no guide drawn")
-                continue
-            # Coloured like the tick it came from, so the guide says which
-            # phase owns the peak it points at as well as where it is.
-            ax.axvline(snapped, color=tick_colors[owner], ls=guide_style,
-                       lw=guide_width, zorder=4)
-        if rows:
-            # Built from 'listed', not 'ordered': a phase whose reflections
-            # all fall outside the window gets no tick row, and must get no
-            # legend entry either, or the legend would name a phase that is
-            # nowhere in the figure. 'listed' is already keyed by label, one
-            # entry per phase, in the order the tick rows were drawn, which
-            # is what pairs a legend entry to a row by position.
-            handles = [Line2D([0], [0], color=tick_colors[label], lw=3,
-                              label=label) for label in listed]
-            # Opposite corner from the trace labels, which start at the
-            # left. A short handle: the colour is the whole message, and a
-            # long rule beside a short phase name reads as a second scale.
-            ax.legend(handles=handles, loc="upper right",
-                      fontsize=xp.FONT_SIZE_LEGEND, framealpha=1,
-                      handlelength=1, handletextpad=1)
+    # Guides span the full height of the axes, in front of the black traces,
+    # drawn at zorder=4 above their zorder=2, so a guide behind a dense stack
+    # of patterns is not hidden by them and a reflection can still be
+    # followed up to the peak it belongs to. axvline works in axes fractions
+    # vertically, so it does not depend on the limits being set yet.
+    for value in guide_lines:
+        snapped, owner = snap_to_phase(value, listed, guide_snap)
+        if snapped is None:
+            print(f"  ! no reflection within {guide_snap:g} deg of "
+                  f"{value:g}, no guide drawn")
+            continue
+        # Coloured like the tick it came from, so the guide says which phase
+        # owns the peak it points at as well as where it is.
+        ax.axvline(snapped, color=tick_colors[owner], ls=guide_style,
+                   lw=guide_width, zorder=4)
+    if rows:
+        # Built from 'listed', not 'ordered': a phase whose reflections all
+        # fall outside the window gets no tick row, and must get no legend
+        # entry either, or the legend would name a phase that is nowhere in
+        # the figure. 'listed' is already keyed by label, one entry per
+        # phase, in the order the tick rows were drawn, which is what pairs
+        # a legend entry to a row by position.
+        handles = [Line2D([0], [0], color=tick_colors[label], lw=3,
+                          label=label) for label in listed]
+        # Opposite corner from the trace labels, which start at the left. A
+        # short handle: the colour is the whole message, and a long rule
+        # beside a short phase name reads as a second scale.
+        ax.legend(handles=handles, loc="upper right",
+                  fontsize=xp.FONT_SIZE_LEGEND, framealpha=1,
+                  handlelength=1, handletextpad=1)
 
     ax.set_xlabel(r"$2\theta\:/\:^\circ$", fontsize=xp.FONT_SIZE_LABEL)
     ax.set_ylabel(r"$\sqrt{\mathrm{Intensity}}$ / a.u." if use_sqrt
@@ -571,7 +605,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                   labelpad=10)
     ax.set_xlim(*widest)
     ax.set_ylim(bottom=(block_top - (rows - 0.5) * pitch
-                        if rows else -0.05 * offset),
+                        if rows else -0.05),
                 # 0.08 was clearance for a curve. A line of text needs the
                 # same room the labels get between traces, or the topmost
                 # one is cut by the frame. max(1.0, label_height): the top

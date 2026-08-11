@@ -135,8 +135,8 @@ with no number keeps its own figure and stays out of the series.
 
 ```
 filename;formula;series_order;series_label
-sample_1.csv;$\mathrm{Mg_2SiO_4}$;1;x = 0.00
-sample_2.csv;$\mathrm{Mg_2SiO_4}$;2;x = 0.10
+sample_1.csv;$\mathrm{Mg_{1-x}Fe_xAl_2O_4}$;1;x = 0.00
+sample_2.csv;$\mathrm{Mg_{1-x}Fe_xAl_2O_4}$;2;x = 0.10
 sample_9.csv;$\mathrm{SiO_2}$;;
 ```
 

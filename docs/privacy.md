@@ -49,17 +49,29 @@ own metadata file, which is excluded. What remains is the appearance of the
 figure, the offsets, heights and line widths, and none of those says
 anything about a sample.
 
-One exception, and it is easy to miss because it sits among the appearance
-settings: **`GUIDE_LINES` holds 2θ positions you read off your own
-patterns.** A reflection position is a measurement. It gives a lattice
-spacing through Bragg's law, and a handful of them identify the phase, so a
-filled `GUIDE_LINES` is sample data wearing the clothes of a drawing option.
-Empty it before committing, or set the guides in section 5 of the notebook,
-where they stay in the widget and never reach the file.
+Four of those settings are the exception, and they are easy to miss because
+they sit among the appearance ones. **Anything in degrees 2θ is a position
+you read off your own patterns, not a preference.** A reflection position is
+a measurement: it gives a lattice spacing through Bragg's law, and a handful
+of them identify the phase. The four:
 
-Everything else in that file can stay as you tuned it. Keep it that way: a
-setting that would name one of your files, or carry a number you measured,
-belongs in the metadata or in the notebook, not here.
+| Setting | What a filled value says |
+|---|---|
+| `GUIDE_LINES` | The sharpest of the four. A guide sits exactly on a reflection, so a filled list is a measured peak table |
+| `PLOT_X_MIN`, `PLOT_X_MAX` | A window framing the reflection the series is about says where that reflection is |
+| `LABEL_X` | Names an empty stretch of your figure, so it says where the reflections are not. Weaker, but still a position |
+
+All four ship unset and should stay that way. Set them in section 5 of the
+notebook, where they stay in the widget and never reach a file, or, for the
+window, per sample through the `x_min`/`x_max` columns of your metadata. CI
+refuses a commit that carries any of them tuned, so a forgotten one is
+caught rather than published.
+
+Everything else in that file is appearance: offsets, heights, line widths,
+styles, weights. Those can stay as you tuned them. Keep it that way, and
+apply the rule that decides it: a setting that would name one of your files,
+or carry a number you measured, belongs in the metadata or in the notebook,
+not here.
 
 ## Phase names
 
