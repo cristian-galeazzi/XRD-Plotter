@@ -7,9 +7,29 @@ import numpy as np
 import pytest
 from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
+from matplotlib.legend import Legend
 from matplotlib.pyplot import close as plt_close
 
 import make_series as ms
+import xrd_plotter as xp
+
+
+@pytest.fixture(autouse=True)
+def shipped_defaults(monkeypatch):
+    """Every test runs against the settings the repository ships.
+
+    The copy of the script an owner runs carries their own tuning, so a
+    test that read a setting off the module would pass in CI and fail on
+    their machine.
+    """
+    for name, value in (("GUIDE_LINES", []), ("LABEL_X", None),
+                        ("LABEL_WEIGHT", "normal"), ("USE_SQRT", True),
+                        ("PLOT_X_MIN", None), ("PLOT_X_MAX", None),
+                        ("LABEL_HEIGHT", 0.90), ("SHOW_TICKS", True),
+                        ("OFFSET", 1.35), ("TICK_HEIGHT", 0.10),
+                        ("GUIDE_SNAP", 0.3), ("LINEWIDTH_TRACE", 0.9),
+                        ("SERIES_LABELS", {})):
+        monkeypatch.setattr(ms, name, value)
 
 
 def test_each_pattern_is_normalised_to_its_own_span():
@@ -143,8 +163,7 @@ def test_the_intensity_axis_carries_no_numbers(series, tmp_path):
                                              tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
-    assert ax.get_yticklabels() == [] or not any(
-        label.get_visible() for label in ax.get_yticklabels())
+    assert not any(label.get_visible() for label in ax.get_yticklabels())
     plt_close(fig)
 
 
@@ -196,12 +215,10 @@ def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
 
 
 def test_by_default_the_labels_start_just_inside_the_left_border(series,
-                                                                 tmp_path,
-                                                                 monkeypatch):
-    # Pinned rather than read off the module: the copy of the script an
-    # owner runs carries their own tuning, and this is a claim about the
-    # default the repository ships.
-    monkeypatch.setattr(ms, "LABEL_X", None)
+                                                                 tmp_path):
+    # LABEL_X is pinned to None by the shipped_defaults fixture: the copy
+    # of the script an owner runs carries their own tuning, and this is a
+    # claim about the default the repository ships.
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                              tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
@@ -239,12 +256,29 @@ def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
     plt_close(fig)
 
 
+def test_the_topmost_label_is_not_cut_off_above_a_full_trace(series,
+                                                              tmp_path,
+                                                              monkeypatch):
+    """LABEL_HEIGHT may sit above the top of the trace, past 1.0."""
+    monkeypatch.setattr(ms, "LABEL_HEIGHT", 1.20)
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
+                                             series,
+                                             tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases, offset=1.35)
+    ax = fig.axes[0]
+    highest_label = max(text.get_position()[1] for text in ax.texts)
+    assert ax.get_ylim()[1] > highest_label + 0.2, (
+        "no room above the top label for the text itself")
+    plt_close(fig)
+
+
 def test_the_phase_legend_sits_opposite_the_trace_labels(series, tmp_path):
     """The labels start at the left, so the legend keeps to the right."""
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                              tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     legend = fig.axes[0].get_legend()
+    assert legend._get_loc() == Legend.codes["upper right"]
     # An opaque frame, so a trace passing behind it does not show through
     # the phase names.
     assert legend.get_frame_on() is True
@@ -317,12 +351,19 @@ def test_the_ticks_are_taller_than_the_traces_are_apart_is_not_the_case(
     """A tick row must fit under the bottom trace without reaching it."""
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                              tmp_path / "absent_metadata.csv")
-    fig = ms.plot_series(traces, phases, offset=1.35)
+    offset = 1.35
+    fig = ms.plot_series(traces, phases, offset=offset)
     ax = fig.axes[0]
     tick_collection = ax.collections[0]
     tops = [segment[:, 1].max() for segment in
             [np.array(s) for s in tick_collection.get_segments()]]
-    assert max(tops) < 0.0, "the ticks reach into the bottom trace"
+    # The tick row's own top sits at block_top + TICK_HEIGHT * offset,
+    # where block_top is -(TICK_HEIGHT + 0.05) * offset: the two cancel
+    # to -0.05 * offset, the clearance plot_series intends between the
+    # bottom trace's baseline at y=0 and the nearest tick.
+    expected_top = -0.05 * offset
+    assert max(tops) == pytest.approx(expected_top), (
+        "the ticks reach into the bottom trace")
     assert ax.get_ylim()[0] < min(
         np.array(s)[:, 1].min()
         for s in tick_collection.get_segments()), "the ticks are clipped"
@@ -441,6 +482,25 @@ def test_the_legend_order_matches_the_tick_row_order_not_the_column_order(
     plt_close(fig)
 
 
+def test_a_phase_with_no_reflections_in_window_gets_no_legend_entry(
+        tmp_path, monkeypatch):
+    """A phase entirely outside the window must draw no tick row either."""
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "two.csv", peak_at=20.0, height=900.0,
+                second_phase=60.0)
+    monkeypatch.setattr(ms, "PLOT_X_MIN", 10.0)
+    monkeypatch.setattr(ms, "PLOT_X_MAX", 50.0)
+    traces, phases, colors = ms.load_series(["two.csv"], folder,
+                                            tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases, colors=colors)
+    ax = fig.axes[0]
+    legend_labels = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert legend_labels == ["Phase 1"]
+    assert len(ax.collections) == 1, "only one phase should draw a tick row"
+    plt_close(fig)
+
+
 def test_the_second_tick_row_sits_one_pitch_below_the_first(tmp_path):
     """A two-phase export must exercise the second and later tick rows."""
     folder = tmp_path / "data"
@@ -555,13 +615,14 @@ def test_the_label_weight_reaches_the_drawn_text(series, tmp_path,
     plt_close(fig)
 
 
-def test_the_repository_ships_an_unweighted_label(series, tmp_path,
-                                                  monkeypatch):
-    # A claim about the shipped default, not about the copy being run, so
-    # the setting is pinned rather than read off the module.
-    monkeypatch.setattr(ms, "LABEL_WEIGHT", "normal")
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
-    fig = ms.plot_series(traces, phases)
-    assert fig.axes[0].texts[0].get_fontweight() == "normal"
-    plt_close(fig)
+def test_the_sqrt_and_linear_variants_do_not_share_an_output_name():
+    """main() must pick the output name up from xp.output_basename.
+
+    A fixed OUTPUT_BASENAME passed straight to xp.save_figure would write
+    both USE_SQRT settings to the same PDF and PNG, the sqrt run silently
+    overwriting the linear one or the other way round.
+    """
+    sqrt_name = xp.output_basename(ms.OUTPUT_BASENAME, True, weighted=True)
+    linear_name = xp.output_basename(ms.OUTPUT_BASENAME, False,
+                                     weighted=True)
+    assert sqrt_name != linear_name

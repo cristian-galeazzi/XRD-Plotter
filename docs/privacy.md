@@ -39,6 +39,16 @@ and a diffraction pattern of an unpublished sample is exactly the kind of
 file you do not own alone. Run locally instead. It costs one `pip install`
 and your files never leave your machine.
 
+## make_series.py
+
+Unlike `Samples_metadata.csv`, [`make_series.py`](../make_series.py) is
+tracked: it is code, not data, so it ships in the repository. But its
+`SERIES` and `SERIES_LABELS` settings get filled in with real file names and
+real sample names while you use it, and those are private in the same way a
+metadata row is. Put both back to their placeholder values before
+committing, and check with `git diff --cached` that the diff you are about
+to commit carries no file name or sample name of your own.
+
 ## Phase names
 
 Phase colours belong in `Samples_metadata.csv`, through the `<phase>_color`

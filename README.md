@@ -75,6 +75,7 @@ XRD_Rietveld_Plotter.ipynb   <- the four sections you run
 xrd_plotter.py               <- the engine, imported by the notebook
 test_xrd_plotter.py          <- the validation suite
 make_series.py               <- optional, one stacked figure for a whole series
+test_make_series.py          <- its validation suite
 requirements.txt             <- the six packages, for the terminal route
 Samples_metadata.csv         <- optional, yours, never committed
 data/                        <- your CSV exports go here
