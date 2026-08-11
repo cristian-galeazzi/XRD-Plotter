@@ -35,7 +35,7 @@ HEADER = "2theta;Obs;Calc;Bkg;diff/sigma;Phase 1"
 def write_export(path, peak_at, height):
     """A synthetic GSAS-II publication export: one peak on a flat background.
 
-    The reflection column holds two positions and is padded, so the parser
+    The reflection column holds one position and is padded, so the parser
     reads it as a phase rather than as a data column.
     """
     angles = np.arange(10.0, 50.0, 0.5)
@@ -102,6 +102,8 @@ def test_the_strongest_sample_does_not_overrun_the_trace_above(series,
 def test_the_intensity_axis_carries_no_numbers(series, tmp_path):
     traces, phases = ms.load_series(["s1.csv"], series,
                                     tmp_path / "absent_metadata.csv")
-    ax = ms.plot_series(traces, phases).axes[0]
+    fig = ms.plot_series(traces, phases)
+    ax = fig.axes[0]
     assert ax.get_yticklabels() == [] or not any(
         label.get_visible() for label in ax.get_yticklabels())
+    plt_close(fig)
