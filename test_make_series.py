@@ -28,7 +28,8 @@ def shipped_defaults(monkeypatch):
                         ("PLOT_X_MIN", None), ("PLOT_X_MAX", None),
                         ("LABEL_HEIGHT", 0.90), ("SHOW_TICKS", True),
                         ("OFFSET", 1.35), ("TICK_HEIGHT", 0.10),
-                        ("GUIDE_SNAP", 0.3), ("LINEWIDTH_TRACE", 0.9)):
+                        ("GUIDE_SNAP", 0.3), ("LINEWIDTH_TRACE", 0.9),
+                        ("GUIDE_STYLE", ":"), ("GUIDE_WIDTH", 1.2)):
         monkeypatch.setattr(ms, name, value)
 
 
@@ -546,7 +547,7 @@ def test_the_run_prints_the_reflections_it_drew(series, tmp_path, capsys):
     printed = capsys.readouterr().out
     # The fixture's only reflection sits at 20.0, and it is what the tick
     # row was drawn from, so it is what the list must offer.
-    assert "for GUIDE_LINES:" in printed
+    assert "to pick the guides from:" in printed
     assert "20.00" in printed
     plt_close(fig)
 
@@ -821,3 +822,51 @@ def test_the_sqrt_argument_reaches_the_data_and_not_just_the_label(series):
     rooted, _phases, _colors = ms.load_series(
             no_labels("s1.csv"), series, pd.DataFrame(), use_sqrt=True)
     assert np.allclose(np.sqrt(linear[0][1]), rooted[0][1])
+
+
+def test_the_guide_style_reaches_the_drawn_line(series):
+    """A guide must be able to be dashed, not only dotted."""
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.1],
+                         guide_style="--")
+    dashed = [line for line in fig.axes[0].lines
+              if line.get_linestyle() in ("--", "dashed")]
+    assert len(dashed) == 1
+    plt_close(fig)
+
+
+def test_the_guide_width_reaches_the_drawn_line(series):
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.1], guide_width=3.0)
+    guides = [line for line in fig.axes[0].lines
+              if line.get_linestyle() in (":", "dotted")]
+    assert guides[0].get_linewidth() == 3.0
+    plt_close(fig)
+
+
+def test_the_guide_style_and_width_fall_back_to_the_settings(series,
+                                                              monkeypatch):
+    monkeypatch.setattr(ms, "GUIDE_STYLE", "-.")
+    monkeypatch.setattr(ms, "GUIDE_WIDTH", 2.5)
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.1])
+    drawn = [line for line in fig.axes[0].lines
+             if line.get_linestyle() in ("-.", "dashdot")]
+    assert len(drawn) == 1
+    assert drawn[0].get_linewidth() == 2.5
+    plt_close(fig)
+
+
+def test_the_trace_width_reaches_every_drawn_trace(series):
+    """The traces, not the guides: a series too thick reads as a block."""
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, linewidth=2.0)
+    solid = [line for line in fig.axes[0].lines
+             if line.get_linestyle() in ("-", "solid")]
+    assert len(solid) == 2
+    assert all(line.get_linewidth() == 2.0 for line in solid)
+    plt_close(fig)

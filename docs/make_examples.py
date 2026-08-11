@@ -146,6 +146,7 @@ def main():
                              label_x=float("nan"), label_weight="bold",
                              tick_height=0.10, show_ticks=True,
                              guide_lines=[30.95, 21.14], guide_snap=0.3,
+                             guide_style=":", guide_width=1.2,
                              linewidth=0.9, use_sqrt=True,
                              window=(None, None))
     path = out / "example_series.png"

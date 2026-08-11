@@ -156,6 +156,11 @@ another**. The ticks and the guides are read from the first member of the
 series, so in a series drawn because a reflection moves, they mark where it
 started rather than where each trace has it.
 
+The window, the spacing, the labels, the ticks and the guides are all
+settings, and each one is a control in section 5, a constant at the top of
+the script and an argument of `plot_series` at the same time. The table of
+all of them, with units and defaults: [docs/series.md](docs/series.md).
+
 ## Settings
 
 The engine lives in [`xrd_plotter.py`](xrd_plotter.py) and the notebook

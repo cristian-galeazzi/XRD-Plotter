@@ -39,30 +39,65 @@ import xrd_plotter as xp
 # called all come from Samples_metadata.csv, the private file beside the
 # notebook that .gitignore excludes: a row with a number in its
 # 'series_order' column joins the series at that position, and its
-# 'series_label' cell names its trace. Nothing in this file identifies a
-# sample, so nothing here has to be undone before a commit. See
-# docs/metadata.md.
+# 'series_label' cell names its trace. See docs/metadata.md.
+#
+# Everything below is the look of the figure. Section 5 of the notebook
+# offers the same settings as controls, so a figure can be tuned there
+# without editing this file; what you set here is what a plain
+# 'python make_series.py' run draws, and what the notebook opens on.
+# Each one is also an argument of plot_series, so nothing has to be
+# written to this module to change one drawing.
+#
+# Two units appear throughout, and they are worth keeping apart:
+#   degrees 2theta   a position on the horizontal axis
+#   trace heights    stack() rescales every pattern to span exactly 1.0
+#                    from its own baseline to its tallest reflection, so
+#                    0.5 is half a pattern tall, wherever it sits
+# Widths are in points, matplotlib's own unit for a line.
 
-# Vertical gap between traces, in the normalised units stack() produces,
-# where every pattern spans 1.0 from baseline to tallest reflection. The
-# gap has to clear LABEL_HEIGHT, the room the label of the trace below
-# needs: below that value the text lands on the trace above it. Raise it
-# to spread a long series out. Past roughly a dozen traces, OFFSET buys
-# label room only by squeezing the patterns themselves, since
-# xp.FIGURE_HEIGHT is fixed and does not grow with the series: a long
-# series wants that raised too.
+# --- The traces ---------------------------------------------------------
+# Vertical distance from one trace's baseline to the next, in trace
+# heights. At 1.0 the top of a pattern touches the baseline above it, so
+# anything larger leaves a gap and anything smaller overlaps them on
+# purpose. It also has to clear LABEL_HEIGHT, the room the label below
+# needs, or that text lands on the trace above. Raise it to spread a short
+# series out. Past roughly a dozen traces it buys label room only by
+# squeezing the patterns themselves, since xp.FIGURE_HEIGHT does not grow
+# with the series: a long series wants that raised too.
 OFFSET = 1.35
 
-# Height of a trace label above its own baseline, where 1.0 is the top of
-# the trace, since stack() gives every pattern a span of exactly 1.0. Below
-# 1.0 the label drops towards the pattern, above it the label rises into the
-# gap. Keep it under OFFSET, or the label lands on the trace above.
+# Width of a trace, in points. Thinner than a single figure's fit line on
+# purpose: a whole series at 1.5 pt turns the figure into a solid block.
+LINEWIDTH_TRACE = 0.9
+
+# sqrt(I) on the drawn copy, so the weak reflections survive beside a
+# strong one. It also flattens the difference in contrast between samples,
+# which matters more here than in a single figure. False draws the
+# intensity as it is. The axis label follows, and so does the output file
+# name, so the two versions never overwrite each other.
+USE_SQRT = True
+
+# The 2theta window every trace is drawn in, in degrees. None at either end
+# takes the widest measured range in the series, as long as
+# xp.PLOT_X_MIN/xp.PLOT_X_MAX are unset too, since xp.plot_window falls
+# back to those before the data. A window fixed here is part of what makes
+# the traces comparable, so prefer setting both. It also sets what each
+# trace is rescaled by, since a pattern is normalised over the part of it
+# the window shows.
+PLOT_X_MIN: float | None = None
+PLOT_X_MAX: float | None = None
+
+# --- The label on each trace --------------------------------------------
+# Height of a trace's label above that trace's own baseline, in trace
+# heights, so 1.0 sits exactly at the top of the pattern. Below 1.0 the
+# label drops towards the pattern, above it the label rises into the gap.
+# Keep it under OFFSET, or the label lands on the trace above.
 LABEL_HEIGHT = 0.90
 
-# Where a trace label starts, in degrees 2theta, measured from its left
-# edge since the text runs rightwards from there. None instead pins every
-# label just inside the left border, whatever window is drawn, which is the
-# only default that works without knowing the range:
+# Where a label starts, in degrees 2theta, measured from its left edge
+# since the text runs rightwards from there. None instead pins every label
+# just inside the left border, whatever window is drawn, which is the only
+# default that works without knowing the range:
 #   LABEL_X = 14.0
 LABEL_X: float | None = None
 
@@ -72,23 +107,27 @@ LABEL_X: float | None = None
 # real bold, so nothing is synthesised from the upright.
 LABEL_WEIGHT = "normal"
 
-# One row of reflection ticks per phase, below the bottom trace, in the
-# colours the per-sample figures use. Set False for traces alone. This
-# also silences the printed reflection list, the tool for picking
-# GUIDE_LINES positions, since with no ticks drawn there is nothing to
-# list.
+# --- The reflection ticks -----------------------------------------------
+# One row of ticks per phase, below the bottom trace, in the colours the
+# per-sample figures use. False draws the traces alone, and also silences
+# the printed reflection list, the tool for picking guide positions, since
+# with no ticks drawn there is nothing to list.
 SHOW_TICKS = True
 
-# Height of one reflection tick, in units of OFFSET. Taller ticks are easier
-# to follow across a wide pattern. The rows sit one TICK_HEIGHT + 0.02
-# apart, so raising this moves them apart instead of overlapping them.
+# Height of one tick, in trace heights, so 0.10 is a tenth of a pattern.
+# Taller ticks are easier to follow across a wide pattern. The rows sit one
+# TICK_HEIGHT + 0.02 apart, so raising this moves them apart instead of
+# overlapping them.
 TICK_HEIGHT = 0.10
 
-# 2theta of the reflections to follow up through the stack, as dotted lines
-# in front of the traces, so a guide is not hidden by the dense stack of
-# patterns it is meant to be followed through. Empty draws none, which is
-# the default. Each value snaps to the nearest reflection position, so a
-# value read off the PDF by eye still lands exactly on its tick:
+# --- The guides -----------------------------------------------------
+# 2theta of the reflections to follow up through the stack, as vertical
+# lines drawn in front of the traces, so a guide is not hidden by the dense
+# stack of patterns it is meant to be followed through. Empty draws none,
+# which is the default. Each value snaps to the nearest reflection
+# position, so a value read off the PDF by eye still lands exactly on its
+# tick, and each guide is drawn in the colour of the phase that owns the
+# reflection it landed on:
 #   GUIDE_LINES = [30.9, 37.0]
 #
 # The one setting in this file that carries data rather than a preference: a
@@ -98,29 +137,29 @@ TICK_HEIGHT = 0.10
 GUIDE_LINES: list[float] = []
 
 # How far a GUIDE_LINES value may sit from a reflection and still snap to
-# it, in degrees. A value with nothing this close is reported and not drawn.
+# it, in degrees. A value with nothing this close is reported and not
+# drawn, rather than being drawn at the typed position where no reflection
+# is. Widen it for a value read off a printed figure, narrow it where two
+# reflections sit close together and the wrong one keeps winning.
 GUIDE_SNAP = 0.3
 
-# sqrt(I) on the drawn copy, as in the notebook, so the weak reflections
-# survive beside a strong one. It also flattens the difference in contrast
-# between samples, which matters more here than in a single figure.
-USE_SQRT = True
+# Line style of the guides, in matplotlib's notation: ':' dotted, '--'
+# dashed, '-.' dash-dot, '-' solid. Dotted is the default because a guide
+# crosses a figure already full of vertical lines, and a dotted line reads
+# as an annotation rather than as one more reflection. Dashed carries
+# further across a tall stack; solid is worth it only for one guide alone.
+GUIDE_STYLE = ":"
 
-# The 2theta window shared by every trace. None takes the widest measured
-# range in the series, as long as xp.PLOT_X_MIN/xp.PLOT_X_MAX are unset too,
-# since xp.plot_window falls back to those before the data. A window fixed
-# here is what makes the traces comparable, so prefer setting both.
-PLOT_X_MIN: float | None = None
-PLOT_X_MAX: float | None = None
+# Width of a guide, in points. Raise it when a guide disappears into a
+# dense stack. Past the width of the traces it crosses, a guide starts
+# hiding the peaks it is there to point at.
+GUIDE_WIDTH = 1.2
 
+# --- Where the files are ------------------------------------------------
 DATA_FOLDER = Path("data")
 METADATA_FILE = Path("Samples_metadata.csv")
 OUTPUT_FOLDER = Path("output")
 OUTPUT_BASENAME = "series_XRD_stacked"
-
-# Thinner than a single figure's fit line: a whole series at 1.5 pt turns
-# the figure into a solid block.
-LINEWIDTH_TRACE = 0.9
 
 
 def stack(patterns: list[np.ndarray], offset: float = OFFSET,
@@ -361,6 +400,8 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                 show_ticks: bool | None = None,
                 guide_lines: list[float] | None = None,
                 guide_snap: float | None = None,
+                guide_style: str | None = None,
+                guide_width: float | None = None,
                 linewidth: float | None = None,
                 use_sqrt: bool | None = None,
                 window: tuple[float | None, float | None] | None = None
@@ -393,6 +434,8 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     show_ticks = SHOW_TICKS if show_ticks is None else show_ticks
     guide_lines = GUIDE_LINES if guide_lines is None else guide_lines
     guide_snap = GUIDE_SNAP if guide_snap is None else guide_snap
+    guide_style = GUIDE_STYLE if guide_style is None else guide_style
+    guide_width = GUIDE_WIDTH if guide_width is None else guide_width
     linewidth = LINEWIDTH_TRACE if linewidth is None else linewidth
     use_sqrt = USE_SQRT if use_sqrt is None else use_sqrt
     window = (PLOT_X_MIN, PLOT_X_MAX) if window is None else window
@@ -485,7 +528,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         # actually there rather than read off the drawn figure by eye.
         if listed:
             print(f"reflections between {widest[0]:g} and {widest[1]:g} deg, "
-                  "for GUIDE_LINES:")
+                  "to pick the guides from:")
             print(format_reflections(listed))
 
         # Guides span the full height of the axes, in front of the black
@@ -504,8 +547,8 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                 continue
             # Coloured like the tick it came from, so the guide says which
             # phase owns the peak it points at as well as where it is.
-            ax.axvline(snapped, color=tick_colors[owner], ls=":",
-                       lw=1.2, zorder=4)
+            ax.axvline(snapped, color=tick_colors[owner], ls=guide_style,
+                       lw=guide_width, zorder=4)
         if rows:
             # Built from 'listed', not 'ordered': a phase whose reflections
             # all fall outside the window gets no tick row, and must get no
