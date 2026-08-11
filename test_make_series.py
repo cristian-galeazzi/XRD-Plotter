@@ -195,13 +195,30 @@ def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
     plt_close(fig)
 
 
-def test_the_labels_are_right_aligned_inside_the_frame(series, tmp_path):
+def test_by_default_the_labels_start_just_inside_the_left_border(series,
+                                                                 tmp_path):
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                              tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     label = fig.axes[0].texts[0]
-    assert label.get_ha() == "right"
-    assert label.get_position()[0] <= 1.0, "a label at x > 1 is outside"
+    assert label.get_ha() == "left"
+    # An axes fraction while LABEL_X is unset, so it holds for any window.
+    assert 0.0 <= label.get_position()[0] < 0.1
+    plt_close(fig)
+
+
+def test_a_label_x_in_degrees_puts_the_label_at_that_angle(series, tmp_path,
+                                                           monkeypatch):
+    monkeypatch.setattr(ms, "LABEL_X", 18.0)
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
+                                             tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    ax = fig.axes[0]
+    label = ax.texts[0]
+    assert label.get_position()[0] == 18.0
+    # In data coordinates now, so 18 means 18 degrees rather than 18 widths
+    # of the axes: the transform has to have changed with the setting.
+    assert label.get_transform() is ax.transData
     plt_close(fig)
 
 
@@ -217,11 +234,16 @@ def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
     plt_close(fig)
 
 
-def test_the_phase_legend_has_no_frame(series, tmp_path):
+def test_the_phase_legend_sits_opposite_the_trace_labels(series, tmp_path):
+    """The labels start at the left, so the legend keeps to the right."""
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                              tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
-    assert fig.axes[0].get_legend().get_frame_on() is False
+    legend = fig.axes[0].get_legend()
+    # An opaque frame, so a trace passing behind it does not show through
+    # the phase names.
+    assert legend.get_frame_on() is True
+    assert legend.get_frame().get_alpha() == 1
     plt_close(fig)
 
 

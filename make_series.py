@@ -64,6 +64,13 @@ OFFSET = 1.35
 # gap. Keep it under OFFSET, or the label lands on the trace above.
 LABEL_HEIGHT = 0.90
 
+# Where a trace label starts, in degrees 2theta, measured from its left
+# edge since the text runs rightwards from there. None instead pins every
+# label just inside the left border, whatever window is drawn, which is the
+# only default that works without knowing the range:
+#   LABEL_X = 14.0
+LABEL_X: float | None = None
+
 # One row of reflection ticks per phase, below the bottom trace, in the
 # colours the per-sample figures use. Set False for traces alone.
 SHOW_TICKS = True
@@ -181,11 +188,9 @@ def snap_to_phase(value: float, rows: dict[str, np.ndarray],
     smallest = tolerance
     for label, positions in rows.items():
         snapped = snap_to_reflection(value, positions, tolerance)
-        if snapped is None:
-            continue
-        distance = abs(snapped - value)
-        if best[0] is None or distance < smallest:
-            best, smallest = (snapped, label), distance
+        if snapped is not None and abs(snapped - value) <= smallest:
+            if best[0] is None or abs(snapped - value) < smallest:
+                best, smallest = (snapped, label), abs(snapped - value)
     return best
 
 
@@ -328,15 +333,21 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         ax.plot(theta[scope], values[scope], color=xp.COLOR_OBS,
                 lw=LINEWIDTH_TRACE, zorder=2)
 
-    # Labels sit inside the frame, right-aligned, above their own trace: the
-    # axes fraction pins them to the right border, the data coordinate
-    # follows the trace. stack() normalises every pattern to a span of 1.0,
-    # so index * offset + 1.0 is the top of that trace and LABEL_HEIGHT
-    # moves the text down towards the pattern or up into the gap.
-    inside_right = blended_transform_factory(ax.transAxes, ax.transData)
+    # Labels sit inside the frame, above their own trace. The y is always a
+    # data coordinate, so it follows the trace: stack() normalises every
+    # pattern to a span of 1.0, so index * offset + 1.0 is the top of that
+    # trace and LABEL_HEIGHT moves the text down towards the pattern or up
+    # into the gap. The x is a real 2theta when LABEL_X names one, and an
+    # axes fraction otherwise, so the shipped default needs no window.
+    if LABEL_X is None:
+        placement = blended_transform_factory(ax.transAxes, ax.transData)
+        label_x = 0.02
+    else:
+        placement = ax.transData
+        label_x = LABEL_X
     for index, (_theta, _obs, name) in enumerate(traces):
-        ax.text(0.98, index * offset + LABEL_HEIGHT, name,
-                transform=inside_right, va="bottom", ha="right",
+        ax.text(label_x, index * offset + LABEL_HEIGHT, name,
+                transform=placement, va="bottom", ha="left",
                 fontsize=xp.FONT_SIZE_LEGEND)
 
     labels = {phase: xp.phase_label(phase) for phase in phases}
@@ -382,15 +393,15 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         # to connect a tick to a peak, so with the ticks off there is
         # nothing left for it to point at.
         for value in GUIDE_LINES:
-            snapped, owner = snap_to_phase(value, listed, GUIDE_SNAP)
+            snapped, phase_label = snap_to_phase(value, listed, GUIDE_SNAP)
             if snapped is None:
                 print(f"  ! no reflection within {GUIDE_SNAP:g} deg of "
                       f"{value:g}, no guide drawn")
                 continue
             # Coloured like the tick it came from, so the guide says which
             # phase owns the peak it points at as well as where it is.
-            ax.axvline(snapped, color=tick_colors[owner], ls=":", lw=1.0,
-                       zorder=1)
+            ax.axvline(snapped, color=tick_colors[phase_label], ls=":",
+                       lw=1.2, zorder=4)
         if rows:
             # Built from 'ordered', the order the tick rows are drawn in,
             # not from the column order of the export: a reader pairs a
@@ -405,8 +416,12 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                 seen.add(label)
                 handles.append(Line2D([0], [0], color=tick_colors[label],
                                       lw=3, label=label))
-            ax.legend(handles=handles, loc="upper left",
-                      fontsize=xp.FONT_SIZE_LEGEND, frameon=False)
+            # Opposite corner from the trace labels, which start at the
+            # left. A short handle: the colour is the whole message, and a
+            # long rule beside a short phase name reads as a second scale.
+            ax.legend(handles=handles, loc="upper right",
+                      fontsize=xp.FONT_SIZE_LEGEND, framealpha=1,
+                      handlelength=1, handletextpad=1)
 
     ax.set_xlabel(r"$2\theta\:/\:^\circ$", fontsize=xp.FONT_SIZE_LABEL)
     ax.set_ylabel(r"$\sqrt{\mathrm{Intensity}}$ / a.u." if USE_SQRT
