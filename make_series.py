@@ -57,6 +57,12 @@ SERIES_LABELS: dict[str, str] = {}
 # with the series: a long series wants that raised too.
 OFFSET = 1.35
 
+# Height of a trace label above its own baseline, where 1.0 is the top of
+# the trace, since stack() gives every pattern a span of exactly 1.0. Below
+# 1.0 the label drops towards the pattern, above it the label rises into the
+# gap. Keep it under OFFSET, or the label lands on the trace above.
+LABEL_HEIGHT = 0.90
+
 # One row of reflection ticks per phase, below the bottom trace, in the
 # colours the per-sample figures use. Set False for traces alone.
 SHOW_TICKS = True
@@ -248,14 +254,16 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         ax.plot(theta[scope], values[scope], color=xp.COLOR_OBS,
                 lw=LINEWIDTH_TRACE, zorder=2)
 
-    # Labels sit inside the frame, right-aligned, in the gap above their own
-    # trace: the axes fraction pins them to the right border, the data
-    # coordinate follows the trace. stack() normalises every pattern to a
-    # span of 1.0, so index * offset + 1.0 is the top of that trace.
+    # Labels sit inside the frame, right-aligned, above their own trace: the
+    # axes fraction pins them to the right border, the data coordinate
+    # follows the trace. stack() normalises every pattern to a span of 1.0,
+    # so index * offset + 1.0 is the top of that trace and LABEL_HEIGHT
+    # moves the text down towards the pattern or up into the gap.
     inside_right = blended_transform_factory(ax.transAxes, ax.transData)
     for index, (_theta, _obs, name) in enumerate(traces):
-        ax.text(0.98, index * offset + 1.0, name, transform=inside_right,
-                va="bottom", ha="right", fontsize=xp.FONT_SIZE_LEGEND)
+        ax.text(0.98, index * offset + LABEL_HEIGHT, name,
+                transform=inside_right, va="bottom", ha="right",
+                fontsize=xp.FONT_SIZE_LEGEND)
 
     labels = {phase: xp.phase_label(phase) for phase in phases}
     ordered = sorted(phases, key=lambda phase: labels[phase])

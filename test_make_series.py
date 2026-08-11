@@ -189,8 +189,13 @@ def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
     placed = {text.get_text(): text.get_position()[1]
               for text in fig.axes[0].texts}
     # stack() normalises every pattern to a span of 1.0, so the top of the
-    # trace at index i sits at i * offset + 1.0.
-    assert placed == {"s1": 1.0, "s2": 2.35, "s3": 3.7}
+    # trace at index i sits at i * offset + 1.0 and LABEL_HEIGHT is measured
+    # from the same baseline. One label per trace, one offset apart, none of
+    # them on the trace above.
+    assert placed["s1"] == ms.LABEL_HEIGHT
+    assert round(placed["s2"] - placed["s1"], 10) == 1.35
+    assert round(placed["s3"] - placed["s2"], 10) == 1.35
+    assert ms.LABEL_HEIGHT < 1.35, "a label at OFFSET hits the trace above"
     plt_close(fig)
 
 
