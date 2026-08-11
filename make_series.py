@@ -91,3 +91,127 @@ def stack(patterns: list[np.ndarray],
         scaled = (values - low) / span if span > 0 else np.zeros_like(values)
         stacked.append(scaled + index * offset)
     return stacked
+
+
+def load_series(filenames: list[str], data_folder: Path, metadata_file: Path
+                ) -> tuple[list[tuple[np.ndarray, np.ndarray, str]],
+                           dict[str, np.ndarray]]:
+    """Read the series in order: (2theta, observed, label) per file.
+
+    The reflection positions come back separately, from the first file that
+    has any, since one row of ticks per phase is drawn for the series rather
+    than one per sample. A file that cannot be read stops the run: a series
+    figure silently missing a member is worse than no figure.
+
+    >>> load_series([], Path("data"), Path("nowhere.csv"))
+    ([], {})
+    """
+    meta = xp.load_metadata(metadata_file)
+    traces: list[tuple[np.ndarray, np.ndarray, str]] = []
+    phases: dict[str, np.ndarray] = {}
+
+    for filename in filenames:
+        path = Path(data_folder) / filename
+        # weighted=False asks the parser for obs and calc rather than for a
+        # 'diff/sigma' column. No residual is drawn here, and requiring the
+        # weighted one would refuse an export that has everything this
+        # figure needs.
+        data, phase_cols, error = xp.read_gsas2_csv(path, weighted=False)
+        if error is not None:
+            raise SystemExit(f"{filename}: {error}")
+        theta, obs, _calc, _bkg, _resid, file_phases = xp.prepare_data(
+            data, phase_cols, use_sqrt=USE_SQRT)
+        name, _pct, _colors, _window = xp.sample_info(meta, filename,
+                                                      path.stem)
+        traces.append((theta, obs, name))
+        if not phases:
+            phases = file_phases
+    return traces, phases
+
+
+def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
+                phases: dict[str, np.ndarray],
+                offset: float = OFFSET) -> Figure:
+    """Draw the stacked series on one set of axes; returns the Figure.
+
+    Typical use, after load_series::
+
+        traces, phases = load_series(SERIES, DATA_FOLDER, METADATA_FILE)
+        fig = plot_series(traces, phases)
+    """
+    fig, ax = plt.subplots(figsize=(xp.FIGURE_WIDTH, xp.FIGURE_HEIGHT),
+                           dpi=110)
+    stacked = stack([obs for _theta, obs, _name in traces], offset)
+
+    # Every trace in the same black. A colour per sample would be a second
+    # scale to decode, and the vertical position already says which sample
+    # is which. Line, not the scatter of the per-sample figure: at this
+    # density the markers of six patterns merge into a block.
+    for (theta, _obs, _name), values in zip(traces, stacked):
+        ax.plot(theta, values, color=xp.COLOR_OBS, lw=LINEWIDTH_TRACE,
+                zorder=2)
+
+    # Labels sit outside the right border, at the baseline of their own
+    # trace: the axes fraction places them horizontally, the data
+    # coordinate vertically.
+    outside_right = blended_transform_factory(ax.transAxes, ax.transData)
+    for index, (_theta, _obs, name) in enumerate(traces):
+        ax.text(1.01, index * offset, name, transform=outside_right,
+                va="bottom", ha="left", fontsize=xp.FONT_SIZE_LEGEND)
+
+    labels = {phase: xp.phase_label(phase) for phase in phases}
+    ordered = sorted(phases, key=lambda phase: labels[phase])
+    tick_colors = xp.phase_colors([labels[phase] for phase in ordered])
+    rows = 0
+    if SHOW_TICKS:
+        for phase in ordered:
+            # A reflection sits at a real angle, so a zero in a phase column
+            # is padding and would draw a tick against the left border.
+            locations = phases[phase][phases[phase] > 0.1]
+            if len(locations):
+                row_y = -0.10 * offset - rows * 0.07 * offset
+                ax.vlines(locations, row_y, row_y + 0.05 * offset,
+                          colors=tick_colors[labels[phase]],
+                          lw=xp.LINEWIDTH_TICKS, zorder=3)
+                rows += 1
+        if rows:
+            ax.legend(handles=[Line2D([0], [0], color=tick_colors[label],
+                                      lw=3, label=label)
+                               for label in dict.fromkeys(labels.values())],
+                      loc="upper left", fontsize=xp.FONT_SIZE_LEGEND,
+                      framealpha=1, edgecolor="black")
+
+    ax.set_xlabel(r"$2\theta\:/\:^\circ$", fontsize=xp.FONT_SIZE_LABEL)
+    ax.set_ylabel(r"$\sqrt{\mathrm{Intensity}}$ / a.u." if USE_SQRT
+                  else r"Intensity / a.u.", fontsize=xp.FONT_SIZE_LABEL,
+                  labelpad=10)
+    widest = xp.plot_window(np.concatenate([t for t, _o, _n in traces]),
+                            PLOT_X_MIN, PLOT_X_MAX)
+    ax.set_xlim(*widest)
+    ax.set_ylim(bottom=(-0.10 * offset - (rows - 0.5) * 0.07 * offset
+                        if rows else -0.05 * offset),
+                top=(len(traces) - 1) * offset + 1.0 + 0.08 * offset)
+    # No numbers on the intensity axis, for the reason the module gives: the
+    # unit is arbitrary, and here the normalisation makes a comparison of
+    # heights between traces meaningless on top of that.
+    ax.tick_params(direction="in", top=False, right=False, left=False,
+                   labelleft=False, width=1.5, length=6,
+                   labelsize=xp.FONT_SIZE_TICK)
+    for spine in ax.spines.values():
+        spine.set_linewidth(xp.LINEWIDTH_BORDER)
+    return fig
+
+
+def main() -> None:
+    """Read SERIES, draw it and write the two files under OUTPUT_FOLDER."""
+    traces, phases = load_series(SERIES, DATA_FOLDER, METADATA_FILE)
+    if not traces:
+        raise SystemExit("SERIES is empty, nothing to draw")
+    fig = plot_series(traces, phases)
+    base = xp.save_figure(fig, OUTPUT_FOLDER, OUTPUT_BASENAME)
+    print(f"wrote {OUTPUT_FOLDER}/pdf/{base}.pdf "
+          f"and {OUTPUT_FOLDER}/png/{base}.png")
+
+
+if __name__ == "__main__":
+    main()
