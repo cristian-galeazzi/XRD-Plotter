@@ -228,6 +228,15 @@ def test_snap_returns_none_when_nothing_is_near_enough():
     assert ms.snap_to_reflection(31.0, positions, tolerance=0.3) is None
 
 
+def test_snap_includes_a_value_exactly_at_the_tolerance_boundary():
+    # abs(nearest - value) <= tolerance: a value exactly tolerance away must
+    # still snap, pinning the inclusive bound against a future '<'. 0.5 is
+    # exact in binary floating point, so the difference lands on the
+    # boundary exactly rather than a hair past it.
+    positions = np.array([20.0])
+    assert ms.snap_to_reflection(20.5, positions, tolerance=0.5) == 20.0
+
+
 def test_snap_on_an_empty_reflection_list_returns_none():
     assert ms.snap_to_reflection(31.0, np.array([]), tolerance=0.3) is None
 

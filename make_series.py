@@ -6,6 +6,11 @@ figures. The refined fit, the background and the residual stay in the
 per-sample figures the notebook writes; this one answers a different
 question, which reflection appears, moves or goes away across the series.
 
+The tick rows and the guides are read from the first file in SERIES only,
+one row of ticks per phase for the whole series rather than one per sample.
+In a series drawn precisely because reflections move, remember that the
+ticks are anchored to that one file and not to every trace on top of them.
+
 Run it from the repository root, with the exports already in data/::
 
     python make_series.py
@@ -44,6 +49,9 @@ SERIES_LABELS: dict[str, str] = {}
 # where every pattern spans 1.0 from baseline to tallest reflection. The
 # 0.35 above a full trace is the room its label needs: below about 1.25 the
 # text lands on the trace above it. Raise it to spread a long series out.
+# Past roughly a dozen traces the room a label needs, fixed in points, closes
+# whatever OFFSET is, since xp.FIGURE_HEIGHT does not grow with the series:
+# a long series needs that raised too.
 OFFSET = 1.35
 
 # One row of reflection ticks per phase, below the bottom trace, in the
@@ -55,7 +63,7 @@ SHOW_TICKS = True
 # apart, so raising this moves them apart instead of overlapping them.
 TICK_HEIGHT = 0.10
 
-# 2theta of the reflections to follow up through the stack, as dashed lines
+# 2theta of the reflections to follow up through the stack, as dotted lines
 # behind the traces. Empty draws none, which is the default. Each value
 # snaps to the nearest reflection position, so a value read off the PDF by
 # eye still lands exactly on its tick:
@@ -72,8 +80,9 @@ GUIDE_SNAP = 0.3
 USE_SQRT = True
 
 # The 2theta window shared by every trace. None takes the widest measured
-# range in the series. A window fixed here is what makes the traces
-# comparable, so prefer setting both.
+# range in the series, as long as xp.PLOT_X_MIN/xp.PLOT_X_MAX are unset too,
+# since xp.plot_window falls back to those before the data. A window fixed
+# here is what makes the traces comparable, so prefer setting both.
 PLOT_X_MIN: float | None = None
 PLOT_X_MAX: float | None = None
 
