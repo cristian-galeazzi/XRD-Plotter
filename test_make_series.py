@@ -196,7 +196,12 @@ def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
 
 
 def test_by_default_the_labels_start_just_inside_the_left_border(series,
-                                                                 tmp_path):
+                                                                 tmp_path,
+                                                                 monkeypatch):
+    # Pinned rather than read off the module: the copy of the script an
+    # owner runs carries their own tuning, and this is a claim about the
+    # default the repository ships.
+    monkeypatch.setattr(ms, "LABEL_X", None)
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
                                              tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
