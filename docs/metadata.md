@@ -140,6 +140,23 @@ sample_2.csv;$\mathrm{Mg_2SiO_4}$;2;x = 0.10
 sample_9.csv;$\mathrm{SiO_2}$;;
 ```
 
+![Five diffraction patterns stacked one above another on a square-root intensity axis, each labelled at its left with a composition, one row of orange and one of blue reflection ticks below the lowest pattern, and two dotted vertical guides rising through the stack in the colour of the phase that owns the reflection they mark.](example_series.png)
+
+Five rows of a metadata file like the one above, drawn. `series_order` put
+them bottom to top, `series_label` wrote `x = 0.00` to `x = 0.40` inside the
+frame, and the two phases keep the names their column headers carry, here
+`Phase 1` and `Phase 2`. The figure is drawn from an invented pattern by
+[`make_examples.py`](make_examples.py), so it shows the layout and no
+measurement.
+
+Read across it: `Phase 2` grows from the bottom trace to the top while the
+`Phase 1` reflections drift right, which is the kind of question a stack
+answers and a pile of separate figures does not. The two tick rows below the
+lowest trace, and the two dotted guides, come from the first member of the
+series, so they mark where a reflection started rather than where each trace
+has it. That is also why the guide at the moving reflection sits beside the
+peak in the upper traces instead of on it.
+
 `series_label` exists because the two figures want different names: the
 single figure has room for a formula, a stacked trace usually does not. Left
 blank it falls back to `formula`, and then to the file name. It accepts the
