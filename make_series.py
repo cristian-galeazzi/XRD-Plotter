@@ -1,9 +1,9 @@
 """One figure for a whole sample series: the observed patterns, stacked.
 
 Every trace is rescaled to the same height and lifted above the one below,
-so the series reads top to bottom as one picture instead of as six separate
-figures. The refined fit, the background and the residual stay in the
-per-sample figures the notebook writes; this one answers a different
+so the series reads top to bottom as one picture instead of as several
+separate figures. The refined fit, the background and the residual stay in
+the per-sample figures the notebook writes; this one answers a different
 question, which reflection appears, moves or goes away across the series.
 
 The tick rows and the guides are read from the first file in SERIES that
@@ -51,11 +51,12 @@ SERIES_LABELS: dict[str, str] = {}
 
 # Vertical gap between traces, in the normalised units stack() produces,
 # where every pattern spans 1.0 from baseline to tallest reflection. The
-# 0.35 above a full trace is the room its label needs: below about 1.25 the
-# text lands on the trace above it. Raise it to spread a long series out.
-# Past roughly a dozen traces, OFFSET buys label room only by squeezing the
-# patterns themselves, since xp.FIGURE_HEIGHT is fixed and does not grow
-# with the series: a long series wants that raised too.
+# gap has to clear LABEL_HEIGHT, the room the label of the trace below
+# needs: below that value the text lands on the trace above it. Raise it
+# to spread a long series out. Past roughly a dozen traces, OFFSET buys
+# label room only by squeezing the patterns themselves, since
+# xp.FIGURE_HEIGHT is fixed and does not grow with the series: a long
+# series wants that raised too.
 OFFSET = 1.35
 
 # Height of a trace label above its own baseline, where 1.0 is the top of
@@ -78,7 +79,10 @@ LABEL_X: float | None = None
 LABEL_WEIGHT = "normal"
 
 # One row of reflection ticks per phase, below the bottom trace, in the
-# colours the per-sample figures use. Set False for traces alone.
+# colours the per-sample figures use. Set False for traces alone. This
+# also silences the printed reflection list, the tool for picking
+# GUIDE_LINES positions, since with no ticks drawn there is nothing to
+# list.
 SHOW_TICKS = True
 
 # Height of one reflection tick, in units of OFFSET. Taller ticks are easier
@@ -87,7 +91,9 @@ SHOW_TICKS = True
 TICK_HEIGHT = 0.10
 
 # 2theta of the reflections to follow up through the stack, as dotted lines
-# behind the traces. Empty draws none, which is the default. Each value
+# in front of the traces, so a guide is not hidden by the dense stack of
+# patterns it is meant to be followed through. Empty draws none, which is
+# the default. Each value
 # snaps to the nearest reflection position, so a value read off the PDF by
 # eye still lands exactly on its tick:
 #   GUIDE_LINES = [30.9, 37.0]
@@ -114,8 +120,8 @@ METADATA_FILE = Path("Samples_metadata.csv")
 OUTPUT_FOLDER = Path("output")
 OUTPUT_BASENAME = "series_XRD_stacked"
 
-# Thinner than a single figure's fit line: six traces at 1.5 pt turn the
-# figure into a solid block.
+# Thinner than a single figure's fit line: a whole series at 1.5 pt turns
+# the figure into a solid block.
 LINEWIDTH_TRACE = 0.9
 
 
@@ -194,9 +200,9 @@ def snap_to_phase(value: float, rows: dict[str, np.ndarray],
     smallest = tolerance
     for label, positions in rows.items():
         snapped = snap_to_reflection(value, positions, tolerance)
-        if snapped is not None and abs(snapped - value) <= smallest:
-            if best[0] is None or abs(snapped - value) < smallest:
-                best, smallest = (snapped, label), abs(snapped - value)
+        if snapped is not None and (best[0] is None
+                                    or abs(snapped - value) < smallest):
+            best, smallest = (snapped, label), abs(snapped - value)
     return best
 
 
@@ -328,7 +334,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     # Every trace in the same black. A colour per sample would be a second
     # scale to decode, and the vertical position already says which sample
     # is which. Line, not the scatter of the per-sample figure: at this
-    # density the markers of six patterns merge into a block.
+    # density the markers of a full series merge into a block.
     #
     # Sliced to the scope, not the whole trace: a point outside the window
     # can land far above 1.0 once normalised, and set_xlim discards it
@@ -392,36 +398,33 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                   "for GUIDE_LINES:")
             print(format_reflections(listed))
 
-        # Guides span the full height of the axes, behind the black traces,
-        # so a tick can be followed up to the peak it belongs to. axvline
-        # works in axes fractions vertically, so it does not depend on the
-        # limits being set yet. Nested under SHOW_TICKS: a guide exists only
-        # to connect a tick to a peak, so with the ticks off there is
-        # nothing left for it to point at.
+        # Guides span the full height of the axes, in front of the black
+        # traces, drawn at zorder=4 above their zorder=2, so a guide behind
+        # a dense stack of patterns is not hidden by them and a tick can
+        # still be followed up to the peak it belongs to. axvline works in
+        # axes fractions vertically, so it does not depend on the limits
+        # being set yet. Nested under SHOW_TICKS: a guide exists only to
+        # connect a tick to a peak, so with the ticks off there is nothing
+        # left for it to point at.
         for value in GUIDE_LINES:
-            snapped, phase_label = snap_to_phase(value, listed, GUIDE_SNAP)
+            snapped, owner = snap_to_phase(value, listed, GUIDE_SNAP)
             if snapped is None:
                 print(f"  ! no reflection within {GUIDE_SNAP:g} deg of "
                       f"{value:g}, no guide drawn")
                 continue
             # Coloured like the tick it came from, so the guide says which
             # phase owns the peak it points at as well as where it is.
-            ax.axvline(snapped, color=tick_colors[phase_label], ls=":",
+            ax.axvline(snapped, color=tick_colors[owner], ls=":",
                        lw=1.2, zorder=4)
         if rows:
-            # Built from 'ordered', the order the tick rows are drawn in,
-            # not from the column order of the export: a reader pairs a
-            # legend entry to a row by position, and with three or more
-            # phases the two orders need not agree.
-            seen: set[str] = set()
-            handles = []
-            for phase in ordered:
-                label = labels[phase]
-                if label in seen:
-                    continue
-                seen.add(label)
-                handles.append(Line2D([0], [0], color=tick_colors[label],
-                                      lw=3, label=label))
+            # Built from 'listed', not 'ordered': a phase whose reflections
+            # all fall outside the window gets no tick row, and must get no
+            # legend entry either, or the legend would name a phase that is
+            # nowhere in the figure. 'listed' is already keyed by label, one
+            # entry per phase, in the order the tick rows were drawn, which
+            # is what pairs a legend entry to a row by position.
+            handles = [Line2D([0], [0], color=tick_colors[label], lw=3,
+                              label=label) for label in listed]
             # Opposite corner from the trace labels, which start at the
             # left. A short handle: the colour is the whole message, and a
             # long rule beside a short phase name reads as a second scale.
@@ -438,8 +441,11 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                         if rows else -0.05 * offset),
                 # 0.08 was clearance for a curve. A line of text needs the
                 # same room the labels get between traces, or the topmost
-                # one is cut by the frame.
-                top=(len(traces) - 1) * offset + 1.0 + 0.30 * offset)
+                # one is cut by the frame. max(1.0, LABEL_HEIGHT): the top
+                # of the trace is at 1.0, but LABEL_HEIGHT may sit above
+                # it, and the frame has to clear whichever is higher.
+                top=(len(traces) - 1) * offset + max(1.0, LABEL_HEIGHT)
+                + 0.30 * offset)
     # No numbers on the intensity axis, for the reason the module gives: the
     # unit is arbitrary, and here the normalisation makes a comparison of
     # heights between traces meaningless on top of that.
@@ -457,7 +463,12 @@ def main() -> None:
     if not traces:
         raise SystemExit("SERIES is empty, nothing to draw")
     fig = plot_series(traces, phases, colors=colors)
-    base = xp.save_figure(fig, OUTPUT_FOLDER, OUTPUT_BASENAME)
+    # weighted=True: this figure draws no residual, so the unweighted
+    # suffix output_basename adds for weighted=False would be meaningless
+    # here. USE_SQRT still tells it sqrt from linear, so the two settings
+    # write to different names instead of overwriting each other.
+    name = xp.output_basename(OUTPUT_BASENAME, USE_SQRT, weighted=True)
+    base = xp.save_figure(fig, OUTPUT_FOLDER, name)
     print(f"wrote {OUTPUT_FOLDER}/pdf/{base}.pdf "
           f"and {OUTPUT_FOLDER}/png/{base}.png")
 
