@@ -41,10 +41,10 @@ SERIES: list[str] = [
 SERIES_LABELS: dict[str, str] = {}
 
 # Vertical gap between traces, in the normalised units stack() produces,
-# where every pattern spans 1.0 from baseline to tallest reflection. Above
-# 1.0 leaves clear air between traces, below 1.0 lets them overlap, which
-# saves height on a long series at the cost of reading the weak reflections.
-OFFSET = 1.15
+# where every pattern spans 1.0 from baseline to tallest reflection. The
+# 0.35 above a full trace is the room its label needs: below about 1.25 the
+# text lands on the trace above it. Raise it to spread a long series out.
+OFFSET = 1.35
 
 # One row of reflection ticks per phase, below the bottom trace, in the
 # colours the per-sample figures use. Set False for traces alone.
@@ -164,13 +164,14 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         ax.plot(theta, values, color=xp.COLOR_OBS, lw=LINEWIDTH_TRACE,
                 zorder=2)
 
-    # Labels sit outside the right border, at the baseline of their own
-    # trace: the axes fraction places them horizontally, the data
-    # coordinate vertically.
-    outside_right = blended_transform_factory(ax.transAxes, ax.transData)
+    # Labels sit inside the frame, right-aligned, in the gap above their own
+    # trace: the axes fraction pins them to the right border, the data
+    # coordinate follows the trace. stack() normalises every pattern to a
+    # span of 1.0, so index * offset + 1.0 is the top of that trace.
+    inside_right = blended_transform_factory(ax.transAxes, ax.transData)
     for index, (_theta, _obs, name) in enumerate(traces):
-        ax.text(1.01, index * offset, name, transform=outside_right,
-                va="bottom", ha="left", fontsize=xp.FONT_SIZE_LEGEND)
+        ax.text(0.98, index * offset + 1.0, name, transform=inside_right,
+                va="bottom", ha="right", fontsize=xp.FONT_SIZE_LEGEND)
 
     labels = {phase: xp.phase_label(phase) for phase in phases}
     ordered = sorted(phases, key=lambda phase: labels[phase])
@@ -192,7 +193,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                                       lw=3, label=label)
                                for label in dict.fromkeys(labels.values())],
                       loc="upper left", fontsize=xp.FONT_SIZE_LEGEND,
-                      framealpha=1, edgecolor="black")
+                      frameon=False)
 
     ax.set_xlabel(r"$2\theta\:/\:^\circ$", fontsize=xp.FONT_SIZE_LABEL)
     ax.set_ylabel(r"$\sqrt{\mathrm{Intensity}}$ / a.u." if USE_SQRT
@@ -203,7 +204,10 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     ax.set_xlim(*widest)
     ax.set_ylim(bottom=(-0.10 * offset - (rows - 0.5) * 0.07 * offset
                         if rows else -0.05 * offset),
-                top=(len(traces) - 1) * offset + 1.0 + 0.08 * offset)
+                # 0.08 was clearance for a curve. A line of text needs the
+                # same room the labels get between traces, or the topmost
+                # one is cut by the frame.
+                top=(len(traces) - 1) * offset + 1.0 + 0.30 * offset)
     # No numbers on the intensity axis, for the reason the module gives: the
     # unit is arbitrary, and here the normalisation makes a comparison of
     # heights between traces meaningless on top of that.

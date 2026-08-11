@@ -140,3 +140,44 @@ def test_a_label_written_for_another_file_does_not_leak(series, tmp_path):
 
 def test_the_module_ships_no_labels_of_its_own():
     assert ms.SERIES_LABELS == {}
+
+
+def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
+    traces, phases = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases, offset=1.35)
+    placed = {text.get_text(): text.get_position()[1]
+              for text in fig.axes[0].texts}
+    # stack() normalises every pattern to a span of 1.0, so the top of the
+    # trace at index i sits at i * offset + 1.0.
+    assert placed == {"s1": 1.0, "s2": 2.35, "s3": 3.7}
+    plt_close(fig)
+
+
+def test_the_labels_are_right_aligned_inside_the_frame(series, tmp_path):
+    traces, phases = ms.load_series(["s1.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    label = fig.axes[0].texts[0]
+    assert label.get_ha() == "right"
+    assert label.get_position()[0] <= 1.0, "a label at x > 1 is outside"
+    plt_close(fig)
+
+
+def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
+    traces, phases = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases, offset=1.35)
+    ax = fig.axes[0]
+    highest_label = max(text.get_position()[1] for text in ax.texts)
+    assert ax.get_ylim()[1] > highest_label + 0.2, (
+        "no room above the top label for the text itself")
+    plt_close(fig)
+
+
+def test_the_phase_legend_has_no_frame(series, tmp_path):
+    traces, phases = ms.load_series(["s1.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    assert fig.axes[0].get_legend().get_frame_on() is False
+    plt_close(fig)
