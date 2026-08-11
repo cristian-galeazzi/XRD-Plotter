@@ -181,3 +181,71 @@ def test_the_phase_legend_has_no_frame(series, tmp_path):
     fig = ms.plot_series(traces, phases)
     assert fig.axes[0].get_legend().get_frame_on() is False
     plt_close(fig)
+
+
+def test_snap_takes_the_nearest_reflection_inside_the_tolerance():
+    positions = np.array([20.0, 30.95, 37.04])
+    assert ms.snap_to_reflection(31.0, positions, tolerance=0.3) == 30.95
+
+
+def test_snap_returns_none_when_nothing_is_near_enough():
+    positions = np.array([20.0, 37.04])
+    assert ms.snap_to_reflection(31.0, positions, tolerance=0.3) is None
+
+
+def test_snap_on_an_empty_reflection_list_returns_none():
+    assert ms.snap_to_reflection(31.0, np.array([]), tolerance=0.3) is None
+
+
+def test_a_guide_is_drawn_at_the_reflection_not_at_the_typed_value(
+        series, tmp_path, monkeypatch):
+    # The first file's only reflection sits at 20.0; 20.2 is inside the
+    # default 0.3 tolerance, so the guide must land on 20.0.
+    monkeypatch.setattr(ms, "GUIDE_LINES", [20.2])
+    traces, phases = ms.load_series(["s1.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    guides = [line for line in fig.axes[0].lines
+              if line.get_linestyle() in (":", "dotted")]
+    assert len(guides) == 1
+    assert float(guides[0].get_xdata()[0]) == 20.0
+    plt_close(fig)
+
+
+def test_a_guide_with_no_reflection_near_it_is_reported_and_not_drawn(
+        series, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(ms, "GUIDE_LINES", [24.0])
+    traces, phases = ms.load_series(["s1.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    guides = [line for line in fig.axes[0].lines
+              if line.get_linestyle() in (":", "dotted")]
+    assert guides == []
+    assert "24" in capsys.readouterr().out
+    plt_close(fig)
+
+
+def test_no_guides_are_drawn_by_default(series, tmp_path):
+    traces, phases = ms.load_series(["s1.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    assert [line for line in fig.axes[0].lines
+            if line.get_linestyle() in (":", "dotted")] == []
+    plt_close(fig)
+
+
+def test_the_ticks_are_taller_than_the_traces_are_apart_is_not_the_case(
+        series, tmp_path):
+    """A tick row must fit under the bottom trace without reaching it."""
+    traces, phases = ms.load_series(["s1.csv"], series,
+                                    tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases, offset=1.35)
+    ax = fig.axes[0]
+    tick_collection = ax.collections[0]
+    tops = [segment[:, 1].max() for segment in
+            [np.array(s) for s in tick_collection.get_segments()]]
+    assert max(tops) < 0.0, "the ticks reach into the bottom trace"
+    assert ax.get_ylim()[0] < min(
+        np.array(s)[:, 1].min()
+        for s in tick_collection.get_segments()), "the ticks are clipped"
+    plt_close(fig)

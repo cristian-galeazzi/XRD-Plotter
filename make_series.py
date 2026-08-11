@@ -50,6 +50,22 @@ OFFSET = 1.35
 # colours the per-sample figures use. Set False for traces alone.
 SHOW_TICKS = True
 
+# Height of one reflection tick, in units of OFFSET. Taller ticks are easier
+# to follow across a wide pattern. The rows sit one TICK_HEIGHT + 0.02
+# apart, so raising this moves them apart instead of overlapping them.
+TICK_HEIGHT = 0.10
+
+# 2theta of the reflections to follow up through the stack, as dashed lines
+# behind the traces. Empty draws none, which is the default. Each value
+# snaps to the nearest reflection position, so a value read off the PDF by
+# eye still lands exactly on its tick:
+#   GUIDE_LINES = [30.9, 37.0]
+GUIDE_LINES: list[float] = []
+
+# How far a GUIDE_LINES value may sit from a reflection and still snap to
+# it, in degrees. A value with nothing this close is reported and not drawn.
+GUIDE_SNAP = 0.3
+
 # sqrt(I) on the drawn copy, as in the notebook, so the weak reflections
 # survive beside a strong one. It also flattens the difference in contrast
 # between samples, which matters more here than in a single figure.
@@ -96,6 +112,25 @@ def stack(patterns: list[np.ndarray],
         scaled = (values - low) / span if span > 0 else np.zeros_like(values)
         stacked.append(scaled + index * offset)
     return stacked
+
+
+def snap_to_reflection(value: float, positions: np.ndarray,
+                       tolerance: float = GUIDE_SNAP) -> float | None:
+    """The reflection position nearest to value, or None past the tolerance.
+
+    A guide line is worth drawing only where a reflection actually is, so a
+    value with nothing near it returns None for the caller to report rather
+    than being drawn at the typed position.
+
+    >>> snap_to_reflection(31.0, np.array([20.0, 30.95, 37.04]), 0.3)
+    30.95
+    >>> snap_to_reflection(31.0, np.array([20.0, 37.04]), 0.3) is None
+    True
+    """
+    if not len(positions):
+        return None
+    nearest = float(positions[np.argmin(np.abs(positions - value))])
+    return nearest if abs(nearest - value) <= tolerance else None
 
 
 def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
@@ -177,17 +212,38 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     ordered = sorted(phases, key=lambda phase: labels[phase])
     tick_colors = xp.phase_colors([labels[phase] for phase in ordered])
     rows = 0
+    pitch = (TICK_HEIGHT + 0.02) * offset  # 0.02 of clearance between rows
+    # The tick block hangs below the bottom trace by 0.05 of a trace height,
+    # whatever TICK_HEIGHT is. Derived from it rather than written out again,
+    # so a taller tick moves the block down instead of growing into the
+    # pattern above it.
+    block_top = -(TICK_HEIGHT + 0.05) * offset
+    drawn: list[np.ndarray] = []
     if SHOW_TICKS:
         for phase in ordered:
             # A reflection sits at a real angle, so a zero in a phase column
             # is padding and would draw a tick against the left border.
             locations = phases[phase][phases[phase] > 0.1]
             if len(locations):
-                row_y = -0.10 * offset - rows * 0.07 * offset
-                ax.vlines(locations, row_y, row_y + 0.05 * offset,
+                row_y = block_top - rows * pitch
+                ax.vlines(locations, row_y, row_y + TICK_HEIGHT * offset,
                           colors=tick_colors[labels[phase]],
                           lw=xp.LINEWIDTH_TICKS, zorder=3)
+                drawn.append(locations)
                 rows += 1
+
+        # Guides span the full height of the axes, behind the black traces,
+        # so a tick can be followed up to the peak it belongs to. axvline
+        # works in axes fractions vertically, so it does not depend on the
+        # limits being set yet.
+        reflections = (np.concatenate(drawn) if drawn else np.array([]))
+        for value in GUIDE_LINES:
+            snapped = snap_to_reflection(value, reflections, GUIDE_SNAP)
+            if snapped is None:
+                print(f"  ! no reflection within {GUIDE_SNAP:g} deg of "
+                      f"{value:g}, no guide drawn")
+                continue
+            ax.axvline(snapped, color=xp.COLOR_BKG, ls=":", lw=1.0, zorder=1)
         if rows:
             ax.legend(handles=[Line2D([0], [0], color=tick_colors[label],
                                       lw=3, label=label)
@@ -202,7 +258,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     widest = xp.plot_window(np.concatenate([t for t, _o, _n in traces]),
                             PLOT_X_MIN, PLOT_X_MAX)
     ax.set_xlim(*widest)
-    ax.set_ylim(bottom=(-0.10 * offset - (rows - 0.5) * 0.07 * offset
+    ax.set_ylim(bottom=(block_top - (rows - 0.5) * pitch
                         if rows else -0.05 * offset),
                 # 0.08 was clearance for a curve. A line of text needs the
                 # same room the labels get between traces, or the topmost
