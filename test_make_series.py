@@ -465,3 +465,54 @@ def test_the_run_prints_the_reflections_it_drew(series, tmp_path, capsys):
     assert "for GUIDE_LINES:" in printed
     assert "20.00" in printed
     plt_close(fig)
+
+
+def test_snap_to_phase_names_the_phase_the_reflection_belongs_to():
+    rows = {"Phase 1": np.array([30.95]), "Phase 2": np.array([37.04])}
+    assert ms.snap_to_phase(37.0, rows, 0.3) == (37.04, "Phase 2")
+    assert ms.snap_to_phase(30.9, rows, 0.3) == (30.95, "Phase 1")
+
+
+def test_snap_to_phase_returns_nothing_when_no_phase_is_near_enough():
+    rows = {"Phase 1": np.array([30.95]), "Phase 2": np.array([37.04])}
+    assert ms.snap_to_phase(27.0, rows, 0.3) == (None, None)
+
+
+def test_the_nearer_phase_wins_and_a_tie_goes_to_the_first_row():
+    rows = {"Phase 1": np.array([20.1]), "Phase 2": np.array([20.4])}
+    assert ms.snap_to_phase(20.0, rows, 0.5)[1] == "Phase 1"
+    assert ms.snap_to_phase(20.5, rows, 0.5)[1] == "Phase 2"
+    tie = {"Phase 1": np.array([19.8]), "Phase 2": np.array([20.2])}
+    assert ms.snap_to_phase(20.0, tie, 0.5)[1] == "Phase 1"
+
+
+def test_a_guide_takes_the_colour_of_its_own_phase(tmp_path, monkeypatch):
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
+    monkeypatch.setattr(ms, "GUIDE_LINES", [30.1])
+    traces, phases, colors = ms.load_series(["two.csv"], folder,
+                                            tmp_path / "absent.csv")
+    fig = ms.plot_series(traces, phases, colors=colors)
+    ax = fig.axes[0]
+    guides = [line for line in ax.lines
+              if line.get_linestyle() in (":", "dotted")]
+    assert len(guides) == 1
+    # The tick rows are drawn as collections, in the same order as the
+    # legend; the second phase owns the reflection at 30.0.
+    second_row = ax.collections[1]
+    assert to_rgba(guides[0].get_color()) == to_rgba(
+        second_row.get_colors()[0])
+    plt_close(fig)
+
+
+def test_two_columns_of_one_phase_are_listed_together(tmp_path, capsys):
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
+    traces, phases, colors = ms.load_series(["two.csv"], folder,
+                                            tmp_path / "absent.csv")
+    fig = ms.plot_series(traces, phases, colors=colors)
+    printed = capsys.readouterr().out
+    assert "20.00" in printed and "30.00" in printed
+    plt_close(fig)

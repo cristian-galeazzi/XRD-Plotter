@@ -160,6 +160,35 @@ def snap_to_reflection(value: float, positions: np.ndarray,
     return nearest if abs(nearest - value) <= tolerance else None
 
 
+def snap_to_phase(value: float, rows: dict[str, np.ndarray],
+                  tolerance: float = GUIDE_SNAP
+                  ) -> tuple[float | None, str | None]:
+    """The nearest reflection across the phases, and the phase it belongs to.
+
+    Snapping per phase rather than against one merged list is what lets a
+    guide be drawn in the colour of its own tick row. Two phases equally
+    close to the same value are a real ambiguity, and the first in the
+    order the rows were given wins it, so the figure is at least the same
+    on every run.
+
+    >>> rows = {"Phase 1": np.array([30.95]), "Phase 2": np.array([37.04])}
+    >>> snap_to_phase(37.0, rows, 0.3)
+    (37.04, 'Phase 2')
+    >>> snap_to_phase(27.0, rows, 0.3)
+    (None, None)
+    """
+    best: tuple[float | None, str | None] = (None, None)
+    smallest = tolerance
+    for label, positions in rows.items():
+        snapped = snap_to_reflection(value, positions, tolerance)
+        if snapped is None:
+            continue
+        distance = abs(snapped - value)
+        if best[0] is None or distance < smallest:
+            best, smallest = (snapped, label), distance
+    return best
+
+
 def reflections_in_window(positions: np.ndarray,
                           window: tuple[float, float] | None = None
                           ) -> np.ndarray:
@@ -321,7 +350,6 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     # so a taller tick moves the block down instead of growing into the
     # pattern above it.
     block_top = -(TICK_HEIGHT + 0.05) * offset
-    drawn: list[np.ndarray] = []
     listed: dict[str, np.ndarray] = {}
     if SHOW_TICKS:
         for phase in ordered:
@@ -331,8 +359,13 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                 ax.vlines(locations, row_y, row_y + TICK_HEIGHT * offset,
                           colors=tick_colors[labels[phase]],
                           lw=xp.LINEWIDTH_TICKS, zorder=3)
-                drawn.append(locations)
-                listed[labels[phase]] = locations
+                # Two columns can carry the same phase name, and the legend
+                # gives them one entry between them. Their positions join
+                # instead of the second replacing the first, or the list and
+                # the guides would know about half the phase.
+                listed[labels[phase]] = (
+                    np.concatenate([listed[labels[phase]], locations])
+                    if labels[phase] in listed else locations)
                 rows += 1
 
         # Printed so a GUIDE_LINES value is picked from the reflections that
@@ -348,14 +381,16 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         # limits being set yet. Nested under SHOW_TICKS: a guide exists only
         # to connect a tick to a peak, so with the ticks off there is
         # nothing left for it to point at.
-        reflections = (np.concatenate(drawn) if drawn else np.array([]))
         for value in GUIDE_LINES:
-            snapped = snap_to_reflection(value, reflections, GUIDE_SNAP)
+            snapped, owner = snap_to_phase(value, listed, GUIDE_SNAP)
             if snapped is None:
                 print(f"  ! no reflection within {GUIDE_SNAP:g} deg of "
                       f"{value:g}, no guide drawn")
                 continue
-            ax.axvline(snapped, color=xp.COLOR_BKG, ls=":", lw=1.0, zorder=1)
+            # Coloured like the tick it came from, so the guide says which
+            # phase owns the peak it points at as well as where it is.
+            ax.axvline(snapped, color=tick_colors[owner], ls=":", lw=1.0,
+                       zorder=1)
         if rows:
             # Built from 'ordered', the order the tick rows are drawn in,
             # not from the column order of the export: a reader pairs a
