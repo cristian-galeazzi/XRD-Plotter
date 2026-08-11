@@ -71,6 +71,12 @@ LABEL_HEIGHT = 0.90
 #   LABEL_X = 14.0
 LABEL_X: float | None = None
 
+# Weight of the trace labels: 'normal', 'medium', 'semibold' or 'bold'.
+# A heavier label separates itself from the pattern it sits over without a
+# box behind it. STIXGeneral, the face these figures are set in, carries a
+# real bold, so nothing is synthesised from the upright.
+LABEL_WEIGHT = "normal"
+
 # One row of reflection ticks per phase, below the bottom trace, in the
 # colours the per-sample figures use. Set False for traces alone.
 SHOW_TICKS = True
@@ -348,7 +354,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     for index, (_theta, _obs, name) in enumerate(traces):
         ax.text(label_x, index * offset + LABEL_HEIGHT, name,
                 transform=placement, va="bottom", ha="left",
-                fontsize=xp.FONT_SIZE_LEGEND)
+                fontsize=xp.FONT_SIZE_LEGEND, fontweight=LABEL_WEIGHT)
 
     labels = {phase: xp.phase_label(phase) for phase in phases}
     ordered = sorted(phases, key=lambda phase: labels[phase])

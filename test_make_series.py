@@ -543,3 +543,25 @@ def test_two_columns_of_one_phase_are_listed_together(tmp_path, capsys):
     printed = capsys.readouterr().out
     assert "20.00" in printed and "30.00" in printed
     plt_close(fig)
+
+
+def test_the_label_weight_reaches_the_drawn_text(series, tmp_path,
+                                                 monkeypatch):
+    monkeypatch.setattr(ms, "LABEL_WEIGHT", "bold")
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
+                                             tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    assert fig.axes[0].texts[0].get_fontweight() == "bold"
+    plt_close(fig)
+
+
+def test_the_repository_ships_an_unweighted_label(series, tmp_path,
+                                                  monkeypatch):
+    # A claim about the shipped default, not about the copy being run, so
+    # the setting is pinned rather than read off the module.
+    monkeypatch.setattr(ms, "LABEL_WEIGHT", "normal")
+    traces, phases, _colors = ms.load_series(["s1.csv"], series,
+                                             tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    assert fig.axes[0].texts[0].get_fontweight() == "normal"
+    plt_close(fig)
