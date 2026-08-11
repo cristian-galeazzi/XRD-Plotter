@@ -4,6 +4,7 @@ import matplotlib
 matplotlib.use("Agg")  # no display in CI, same as test_xrd_plotter.py
 
 import numpy as np
+import pandas as pd
 import pytest
 from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
@@ -27,8 +28,7 @@ def shipped_defaults(monkeypatch):
                         ("PLOT_X_MIN", None), ("PLOT_X_MAX", None),
                         ("LABEL_HEIGHT", 0.90), ("SHOW_TICKS", True),
                         ("OFFSET", 1.35), ("TICK_HEIGHT", 0.10),
-                        ("GUIDE_SNAP", 0.3), ("LINEWIDTH_TRACE", 0.9),
-                        ("SERIES_LABELS", {})):
+                        ("GUIDE_SNAP", 0.3), ("LINEWIDTH_TRACE", 0.9)):
         monkeypatch.setattr(ms, name, value)
 
 
@@ -59,6 +59,16 @@ def test_a_scope_sets_the_range_instead_of_the_whole_pattern():
     stacked = ms.stack([pattern], offset=0.0, scopes=[scope])[0]
     assert stacked[:2].tolist() == [0.0, 1.0]
     assert stacked[2] > 1.0  # outside the scope, left to be cropped by xlim
+
+
+def no_labels(*names):
+    """The (file name, label) pairs load_series takes, with no label set.
+
+    Most tests care about the figure rather than about the names on it, and
+    a label of None is what a metadata row without a 'series_label' cell
+    produces.
+    """
+    return [(name, None) for name in names]
 
 
 HEADER = "2theta;Obs;Calc;Bkg;diff/sigma;Phase 1"
@@ -116,29 +126,27 @@ def series(tmp_path):
 
 
 def test_every_named_file_becomes_one_trace(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
-                                             series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv", "s3.csv"), series, pd.DataFrame())
     assert len(traces) == 3
     assert phases, "the reflection column should be read as a phase"
 
 
 def test_a_missing_file_stops_the_run_and_names_itself(series, tmp_path):
     with pytest.raises(SystemExit, match="s9.csv"):
-        ms.load_series(["s9.csv"], series, tmp_path / "absent_metadata.csv")
+        ms.load_series(no_labels("s9.csv"), series, pd.DataFrame())
 
 
 def test_the_trace_label_falls_back_to_the_file_stem(series, tmp_path):
-    traces, _, _colors = ms.load_series(["s2.csv"], series,
-                                        tmp_path / "absent_metadata.csv")
+    traces, _, _colors = ms.load_series(
+            no_labels("s2.csv"), series, pd.DataFrame())
     assert traces[0][2] == "s2"
 
 
 def test_the_figure_carries_one_line_and_one_label_per_sample(series,
                                                               tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
-                                             series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv", "s3.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
     assert len(ax.lines) == 3
@@ -149,9 +157,8 @@ def test_the_figure_carries_one_line_and_one_label_per_sample(series,
 def test_the_strongest_sample_does_not_overrun_the_trace_above(series,
                                                               tmp_path):
     """s3 scatters many times harder than s1; normalisation must hide that."""
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
-                                             series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv", "s3.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases, offset=1.5)
     tops = [float(line.get_ydata().max()) for line in fig.axes[0].lines]
     assert tops[0] < 1.5 and tops[1] < 3.0
@@ -159,8 +166,8 @@ def test_the_strongest_sample_does_not_overrun_the_trace_above(series,
 
 
 def test_the_intensity_axis_carries_no_numbers(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
     assert not any(label.get_visible() for label in ax.get_yticklabels())
@@ -176,8 +183,8 @@ def write_metadata(path, filename, formula):
 def test_a_written_label_wins_over_the_metadata_formula(series, tmp_path):
     meta = tmp_path / "meta.csv"
     write_metadata(meta, "s1.csv", "Formula From Metadata")
-    traces, _, _colors = ms.load_series(["s1.csv"], series, meta,
-                                        labels={"s1.csv": "Label I Wrote"})
+    traces, _, _colors = ms.load_series(
+            [("s1.csv", "Label I Wrote")], series, xp.load_metadata(meta))
     assert traces[0][2] == "Label I Wrote"
 
 
@@ -185,21 +192,14 @@ def test_without_a_written_label_the_metadata_formula_is_used(series,
                                                               tmp_path):
     meta = tmp_path / "meta.csv"
     write_metadata(meta, "s1.csv", "Formula From Metadata")
-    traces, _, _colors = ms.load_series(["s1.csv"], series, meta, labels={})
+    traces, _, _colors = ms.load_series(
+            [("s1.csv", None)], series, xp.load_metadata(meta))
     assert traces[0][2] == "Formula From Metadata"
 
 
-def test_a_label_written_for_another_file_does_not_leak(series, tmp_path):
-    traces, _, _colors = ms.load_series(["s1.csv"], series,
-                                        tmp_path / "absent_metadata.csv",
-                                        labels={"s2.csv": "Label I Wrote"})
-    assert traces[0][2] == "s1"
-
-
 def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
-                                             series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv", "s3.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases, offset=1.35)
     placed = {text.get_text(): text.get_position()[1]
               for text in fig.axes[0].texts}
@@ -219,8 +219,8 @@ def test_by_default_the_labels_start_just_inside_the_left_border(series,
     # LABEL_X is pinned to None by the shipped_defaults fixture: the copy
     # of the script an owner runs carries their own tuning, and this is a
     # claim about the default the repository ships.
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     label = fig.axes[0].texts[0]
     assert label.get_ha() == "left"
@@ -232,8 +232,8 @@ def test_by_default_the_labels_start_just_inside_the_left_border(series,
 def test_a_label_x_in_degrees_puts_the_label_at_that_angle(series, tmp_path,
                                                            monkeypatch):
     monkeypatch.setattr(ms, "LABEL_X", 18.0)
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
     label = ax.texts[0]
@@ -245,9 +245,8 @@ def test_a_label_x_in_degrees_puts_the_label_at_that_angle(series, tmp_path,
 
 
 def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
-                                             series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv", "s3.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases, offset=1.35)
     ax = fig.axes[0]
     highest_label = max(text.get_position()[1] for text in ax.texts)
@@ -261,9 +260,8 @@ def test_the_topmost_label_is_not_cut_off_above_a_full_trace(series,
                                                               monkeypatch):
     """LABEL_HEIGHT may sit above the top of the trace, past 1.0."""
     monkeypatch.setattr(ms, "LABEL_HEIGHT", 1.20)
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
-                                             series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv", "s3.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases, offset=1.35)
     ax = fig.axes[0]
     highest_label = max(text.get_position()[1] for text in ax.texts)
@@ -274,8 +272,8 @@ def test_the_topmost_label_is_not_cut_off_above_a_full_trace(series,
 
 def test_the_phase_legend_sits_opposite_the_trace_labels(series, tmp_path):
     """The labels start at the left, so the legend keeps to the right."""
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     legend = fig.axes[0].get_legend()
     assert legend._get_loc() == Legend.codes["upper right"]
@@ -314,8 +312,8 @@ def test_a_guide_is_drawn_at_the_reflection_not_at_the_typed_value(
     # The first file's only reflection sits at 20.0; 20.2 is inside the
     # default 0.3 tolerance, so the guide must land on 20.0.
     monkeypatch.setattr(ms, "GUIDE_LINES", [20.2])
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     guides = [line for line in fig.axes[0].lines
               if line.get_linestyle() in (":", "dotted")]
@@ -327,8 +325,8 @@ def test_a_guide_is_drawn_at_the_reflection_not_at_the_typed_value(
 def test_a_guide_with_no_reflection_near_it_is_reported_and_not_drawn(
         series, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(ms, "GUIDE_LINES", [24.0])
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     guides = [line for line in fig.axes[0].lines
               if line.get_linestyle() in (":", "dotted")]
@@ -338,8 +336,8 @@ def test_a_guide_with_no_reflection_near_it_is_reported_and_not_drawn(
 
 
 def test_no_guides_are_drawn_by_default(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     assert [line for line in fig.axes[0].lines
             if line.get_linestyle() in (":", "dotted")] == []
@@ -349,8 +347,8 @@ def test_no_guides_are_drawn_by_default(series, tmp_path):
 def test_the_ticks_are_taller_than_the_traces_are_apart_is_not_the_case(
         series, tmp_path):
     """A tick row must fit under the bottom trace without reaching it."""
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     offset = 1.35
     fig = ms.plot_series(traces, phases, offset=offset)
     ax = fig.axes[0]
@@ -380,9 +378,8 @@ def test_the_window_not_the_off_window_peak_sets_the_normalisation(
                            near_height=50.0, far_peak=45.0, far_height=8000.0)
     monkeypatch.setattr(ms, "PLOT_X_MIN", 15.0)
     monkeypatch.setattr(ms, "PLOT_X_MAX", 25.0)
-    traces, phases, _colors = ms.load_series(["plain.csv", "loaded.csv"],
-                                             folder,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("plain.csv", "loaded.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     tops = []
     for line in fig.axes[0].lines:
@@ -413,8 +410,8 @@ def test_the_drawn_line_does_not_spike_at_the_window_edge(tmp_path,
                            near_height=5.0, far_peak=27.0, far_height=9000.0)
     monkeypatch.setattr(ms, "PLOT_X_MIN", 15.0)
     monkeypatch.setattr(ms, "PLOT_X_MAX", 25.25)
-    traces, phases, _colors = ms.load_series(["spiked.csv"], folder,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("spiked.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     values = fig.axes[0].lines[0].get_ydata()
     assert float(np.max(values)) < 1.5, (
@@ -439,9 +436,8 @@ def test_a_trace_entirely_outside_the_window_still_draws(tmp_path,
                                         encoding="utf-8")
     monkeypatch.setattr(ms, "PLOT_X_MIN", 10.0)
     monkeypatch.setattr(ms, "PLOT_X_MAX", 50.0)
-    traces, phases, _colors = ms.load_series(["inside.csv", "outside.csv"],
-                                             folder,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("inside.csv", "outside.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     assert isinstance(fig, Figure)
     plt_close(fig)
@@ -451,7 +447,8 @@ def test_a_metadata_colour_reaches_the_tick_row(series, tmp_path):
     meta = tmp_path / "meta.csv"
     meta.write_text("filename;phase 1_color\ns1.csv;#123456\n",
                     encoding="utf-8")
-    traces, phases, colors = ms.load_series(["s1.csv"], series, meta)
+    traces, phases, colors = ms.load_series(
+            [("s1.csv", None)], series, xp.load_metadata(meta))
     fig = ms.plot_series(traces, phases, colors=colors)
     tick_collection = fig.axes[0].collections[0]
     assert tuple(tick_collection.get_color()[0]) == to_rgba("#123456")
@@ -473,8 +470,8 @@ def test_the_legend_order_matches_the_tick_row_order_not_the_column_order(
         lines.append(f"{angle:.2f};{value:.4f};{value:.4f};100.0;0.1;"
                      f"{phase2};{phase1}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    traces, phases, colors = ms.load_series(["reversed.csv"], folder,
-                                            tmp_path / "absent_metadata.csv")
+    traces, phases, colors = ms.load_series(
+            no_labels("reversed.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases, colors=colors)
     legend_labels = [t.get_text()
                      for t in fig.axes[0].get_legend().get_texts()]
@@ -491,8 +488,8 @@ def test_a_phase_with_no_reflections_in_window_gets_no_legend_entry(
                 second_phase=60.0)
     monkeypatch.setattr(ms, "PLOT_X_MIN", 10.0)
     monkeypatch.setattr(ms, "PLOT_X_MAX", 50.0)
-    traces, phases, colors = ms.load_series(["two.csv"], folder,
-                                            tmp_path / "absent_metadata.csv")
+    traces, phases, colors = ms.load_series(
+            no_labels("two.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases, colors=colors)
     ax = fig.axes[0]
     legend_labels = [t.get_text() for t in ax.get_legend().get_texts()]
@@ -506,8 +503,8 @@ def test_the_second_tick_row_sits_one_pitch_below_the_first(tmp_path):
     folder = tmp_path / "data"
     folder.mkdir()
     write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
-    traces, phases, _colors = ms.load_series(["two.csv"], folder,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("two.csv"), folder, pd.DataFrame())
     offset = 1.35
     fig = ms.plot_series(traces, phases, offset=offset)
     ax = fig.axes[0]
@@ -543,8 +540,8 @@ def test_the_printed_list_wraps_instead_of_running_off_the_terminal():
 
 
 def test_the_run_prints_the_reflections_it_drew(series, tmp_path, capsys):
-    traces, phases, colors = ms.load_series(["s1.csv"], series,
-                                            tmp_path / "absent_metadata.csv")
+    traces, phases, colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases, colors=colors)
     printed = capsys.readouterr().out
     # The fixture's only reflection sits at 20.0, and it is what the tick
@@ -578,8 +575,8 @@ def test_a_guide_takes_the_colour_of_its_own_phase(tmp_path, monkeypatch):
     folder.mkdir()
     write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
     monkeypatch.setattr(ms, "GUIDE_LINES", [30.1])
-    traces, phases, colors = ms.load_series(["two.csv"], folder,
-                                            tmp_path / "absent.csv")
+    traces, phases, colors = ms.load_series(
+            no_labels("two.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases, colors=colors)
     ax = fig.axes[0]
     guides = [line for line in ax.lines
@@ -597,8 +594,8 @@ def test_two_columns_of_one_phase_are_listed_together(tmp_path, capsys):
     folder = tmp_path / "data"
     folder.mkdir()
     write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
-    traces, phases, colors = ms.load_series(["two.csv"], folder,
-                                            tmp_path / "absent.csv")
+    traces, phases, colors = ms.load_series(
+            no_labels("two.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases, colors=colors)
     printed = capsys.readouterr().out
     assert "20.00" in printed and "30.00" in printed
@@ -608,8 +605,8 @@ def test_two_columns_of_one_phase_are_listed_together(tmp_path, capsys):
 def test_the_label_weight_reaches_the_drawn_text(series, tmp_path,
                                                  monkeypatch):
     monkeypatch.setattr(ms, "LABEL_WEIGHT", "bold")
-    traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                             tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases)
     assert fig.axes[0].texts[0].get_fontweight() == "bold"
     plt_close(fig)
@@ -626,3 +623,108 @@ def test_the_sqrt_and_linear_variants_do_not_share_an_output_name():
     linear_name = xp.output_basename(ms.OUTPUT_BASENAME, False,
                                      weighted=True)
     assert sqrt_name != linear_name
+
+
+def write_series_metadata(path, rows):
+    """A metadata file with the series columns; rows are dicts of cells."""
+    columns = ["filename", "formula", "series_order", "series_label"]
+    lines = [";".join(columns)]
+    for row in rows:
+        lines.append(";".join(str(row.get(c, "")) for c in columns))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_only_the_rows_with_an_order_join_the_series(tmp_path):
+    meta_file = tmp_path / "meta.csv"
+    write_series_metadata(meta_file, [
+        {"filename": "s1.csv", "series_order": 2},
+        {"filename": "s2.csv"},
+        {"filename": "s3.csv", "series_order": 1},
+    ])
+    entries = ms.series_from_metadata(xp.load_metadata(meta_file))
+    assert [name for name, _label in entries] == ["s3.csv", "s1.csv"]
+
+
+def test_the_order_is_the_number_not_the_row_position(tmp_path):
+    meta_file = tmp_path / "meta.csv"
+    write_series_metadata(meta_file, [
+        {"filename": "s1.csv", "series_order": 30},
+        {"filename": "s2.csv", "series_order": 4},
+        {"filename": "s3.csv", "series_order": 100},
+    ])
+    entries = ms.series_from_metadata(xp.load_metadata(meta_file))
+    assert [name for name, _label in entries] == ["s2.csv", "s1.csv", "s3.csv"]
+
+
+def test_a_series_label_is_carried_and_a_blank_one_is_not(tmp_path):
+    meta_file = tmp_path / "meta.csv"
+    write_series_metadata(meta_file, [
+        {"filename": "s1.csv", "series_order": 1, "series_label": "First"},
+        {"filename": "s2.csv", "series_order": 2},
+    ])
+    entries = ms.series_from_metadata(xp.load_metadata(meta_file))
+    assert entries == [("s1.csv", "First"), ("s2.csv", None)]
+
+
+def test_an_unreadable_order_is_reported_and_the_row_left_out(tmp_path,
+                                                              capsys):
+    meta_file = tmp_path / "meta.csv"
+    write_series_metadata(meta_file, [
+        {"filename": "s1.csv", "series_order": "first"},
+        {"filename": "s2.csv", "series_order": 1},
+    ])
+    entries = ms.series_from_metadata(xp.load_metadata(meta_file))
+    assert [name for name, _label in entries] == ["s2.csv"]
+    assert "s1.csv" in capsys.readouterr().out
+
+
+def test_a_blank_order_is_left_out_in_silence(tmp_path, capsys):
+    """A blank cell is a choice, not a typo, and must not be reported."""
+    meta_file = tmp_path / "meta.csv"
+    write_series_metadata(meta_file, [
+        {"filename": "s1.csv", "series_order": 1},
+        {"filename": "s2.csv"},
+    ])
+    ms.series_from_metadata(xp.load_metadata(meta_file))
+    assert "s2.csv" not in capsys.readouterr().out
+
+
+def test_a_metadata_without_the_column_yields_no_series(tmp_path):
+    meta_file = tmp_path / "meta.csv"
+    meta_file.write_text("filename;formula\ns1.csv;Something\n",
+                         encoding="utf-8")
+    assert ms.series_from_metadata(xp.load_metadata(meta_file)) == []
+
+
+def test_an_absent_metadata_yields_no_series():
+    assert ms.series_from_metadata(pd.DataFrame()) == []
+
+
+def test_the_series_label_wins_over_the_formula(series, tmp_path):
+    meta_file = tmp_path / "meta.csv"
+    write_series_metadata(meta_file, [
+        {"filename": "s1.csv", "formula": "From Formula",
+         "series_order": 1, "series_label": "From Label"},
+    ])
+    meta = xp.load_metadata(meta_file)
+    traces, _phases, _colors = ms.load_series(
+            ms.series_from_metadata(meta), series, meta)
+    assert traces[0][2] == "From Label"
+
+
+def test_without_a_series_label_the_formula_names_the_trace(series,
+                                                            tmp_path):
+    meta_file = tmp_path / "meta.csv"
+    write_series_metadata(meta_file, [
+        {"filename": "s1.csv", "formula": "From Formula", "series_order": 1},
+    ])
+    meta = xp.load_metadata(meta_file)
+    traces, _phases, _colors = ms.load_series(
+            ms.series_from_metadata(meta), series, meta)
+    assert traces[0][2] == "From Formula"
+
+
+def test_the_module_holds_no_list_of_file_names():
+    """The point of this task: no setting an owner fills with real names."""
+    assert not hasattr(ms, "SERIES")
+    assert not hasattr(ms, "SERIES_LABELS")

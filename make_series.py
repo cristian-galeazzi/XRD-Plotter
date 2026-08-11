@@ -6,8 +6,8 @@ separate figures. The refined fit, the background and the residual stay in
 the per-sample figures the notebook writes; this one answers a different
 question, which reflection appears, moves or goes away across the series.
 
-The tick rows and the guides are read from the first file in SERIES that
-carries a reflection column, one row of ticks per phase for the whole
+The tick rows and the guides are read from the first file of the series
+that carries a reflection column, one row of ticks per phase for the whole
 series rather than one per sample. In a series drawn precisely because
 reflections move, remember that the ticks are anchored to that one file
 and not to every trace on top of them. A first file whose reflection
@@ -27,6 +27,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.transforms import blended_transform_factory
@@ -34,20 +35,13 @@ from matplotlib.transforms import blended_transform_factory
 import xrd_plotter as xp
 
 # --- Settings ----------------------------------------------------------
-# The series, bottom trace first. Listed by hand because the order that
-# means something is the physical one, composition or temperature or time,
-# and no sort of the file names recovers it. A name here that is not in
-# DATA_FOLDER stops the run rather than leaving a gap in the series.
-SERIES: list[str] = [
-    "sample_1.csv",
-    "sample_2.csv",
-    "sample_3.csv",
-]
-
-# Legend text per file, winning over the 'formula' column of the metadata.
-# Empty leaves the behaviour as it is: the metadata first, then the file
-# stem. The key is the file name as it appears in SERIES.
-SERIES_LABELS: dict[str, str] = {}
+# Which samples the series holds, in which order, and what each trace is
+# called all come from Samples_metadata.csv, the private file beside the
+# notebook that .gitignore excludes: a row with a number in its
+# 'series_order' column joins the series at that position, and its
+# 'series_label' cell names its trace. Nothing in this file identifies a
+# sample, so nothing here has to be undone before a commit. See
+# docs/metadata.md.
 
 # Vertical gap between traces, in the normalised units stack() produces,
 # where every pattern spans 1.0 from baseline to tallest reflection. The
@@ -250,15 +244,65 @@ def format_reflections(rows: dict[str, np.ndarray]) -> str:
     return "\n".join(lines)
 
 
-def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
-                labels: dict[str, str] | None = None
+def series_from_metadata(meta: pd.DataFrame) -> list[tuple[str, str | None]]:
+    """The series as (file name, label) pairs, in the order given.
+
+    A row joins the series by carrying a number in 'series_order', and the
+    number is the position rather than the row's place in the file, so the
+    series is reordered in a spreadsheet without touching any code. A row
+    with no number is left out in silence, since a blank cell is a choice;
+    a row with something that is not a number is left out and says so. The
+    label is the 'series_label' cell, or None to let load_series fall back
+    to the formula and then the file name.
+
+    >>> meta = pd.DataFrame({"series_order": ["2", "1"],
+    ...                      "series_label": ["B", ""]},
+    ...                     index=pd.Index(["b.csv", "a.csv"],
+    ...                                    name="filename"))
+    >>> series_from_metadata(meta)
+    [('a.csv', None), ('b.csv', 'B')]
+    >>> series_from_metadata(pd.DataFrame())
+    []
+    """
+    if "series_order" not in getattr(meta, "columns", []):
+        return []
+    ordered = []
+    for filename in meta.index:
+        row = meta.loc[filename]
+        cell = row.get("series_order")
+        # pd.isna as well as the string test: load_metadata reads every
+        # cell as a string, and an empty one arrives as NaN rather than as
+        # '', which to_number would then report as unreadable.
+        if cell is None or pd.isna(cell) or not str(cell).strip():
+            continue
+        position = xp.to_number(cell)
+        if position is None:
+            # Reported rather than dropped in silence: a typo in one cell
+            # would otherwise remove a sample from the figure invisibly.
+            print(f"  ! {filename}: 'series_order' is not a number "
+                  f"({cell!r}), not drawn in the series")
+            continue
+        label = row.get("series_label")
+        if not isinstance(label, str) or not label.strip():
+            label = None
+        ordered.append((position, str(filename), label))
+    # The file name breaks a tie, so two rows sharing a position give the
+    # same figure on every run instead of following the file's row order.
+    ordered.sort(key=lambda row: (row[0], row[1]))
+    return [(name, label) for _position, name, label in ordered]
+
+
+def load_series(entries: list[tuple[str, str | None]], data_folder: Path,
+                meta: pd.DataFrame
                 ) -> tuple[list[tuple[np.ndarray, np.ndarray, str]],
                            dict[str, np.ndarray], dict[str, str]]:
     """Read the series in order: (2theta, observed, label) per file.
 
-    The label is what SERIES_LABELS says for that file name, or the
-    'formula' cell of its metadata row, or the file stem, first hit
-    winning. 'labels' overrides the SERIES_LABELS constant for this call.
+    'entries' is what series_from_metadata returns, the file names in the
+    order they are drawn with the label each carries. A label of None falls
+    back to the 'formula' cell of that sample's metadata row, and then to
+    the file name without its extension. The metadata arrives already
+    loaded, so a run reads it once.
 
     The reflection positions and the phase colour overrides come back
     separately, from the first file that carries a reflection column, since
@@ -268,16 +312,14 @@ def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
     position worth drawing. A file that cannot be read stops the run: a
     series figure silently missing a member is worse than no figure.
 
-    >>> load_series([], Path("data"), Path("nowhere.csv"))
+    >>> load_series([], Path("data"), pd.DataFrame())
     ([], {}, {})
     """
-    overrides = SERIES_LABELS if labels is None else labels
-    meta = xp.load_metadata(metadata_file)
     traces: list[tuple[np.ndarray, np.ndarray, str]] = []
     phases: dict[str, np.ndarray] = {}
     colors: dict[str, str] = {}
 
-    for filename in filenames:
+    for filename, override in entries:
         path = Path(data_folder) / filename
         # weighted=False asks the parser for obs and calc rather than for a
         # 'diff/sigma' column. No residual is drawn here, and requiring the
@@ -290,9 +332,8 @@ def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
             data, phase_cols, use_sqrt=USE_SQRT)
         name, _pct, file_colors, _window = xp.sample_info(meta, filename,
                                                           path.stem)
-        # get with a default rather than 'or': a label deliberately set to
-        # an empty string stays empty instead of falling back.
-        traces.append((theta, obs, overrides.get(filename, name)))
+        traces.append((theta, obs,
+                       override if override is not None else name))
         if not phases:
             phases = file_phases
             colors = file_colors
@@ -307,8 +348,9 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
 
     Typical use, after load_series::
 
-        traces, phases, colors = load_series(SERIES, DATA_FOLDER,
-                                             METADATA_FILE)
+        meta = xp.load_metadata(METADATA_FILE)
+        traces, phases, colors = load_series(series_from_metadata(meta),
+                                             DATA_FOLDER, meta)
         fig = plot_series(traces, phases, colors=colors)
     """
     fig, ax = plt.subplots(figsize=(xp.FIGURE_WIDTH, xp.FIGURE_HEIGHT),
@@ -458,10 +500,14 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
 
 
 def main() -> None:
-    """Read SERIES, draw it and write the two files under OUTPUT_FOLDER."""
-    traces, phases, colors = load_series(SERIES, DATA_FOLDER, METADATA_FILE)
-    if not traces:
-        raise SystemExit("SERIES is empty, nothing to draw")
+    """Draw the series the metadata names and write the two output files."""
+    meta = xp.load_metadata(METADATA_FILE)
+    entries = series_from_metadata(meta)
+    if not entries:
+        raise SystemExit(
+            f"no sample carries a 'series_order' in {METADATA_FILE}, so "
+            "there is no series to draw. See docs/metadata.md")
+    traces, phases, colors = load_series(entries, DATA_FOLDER, meta)
     fig = plot_series(traces, phases, colors=colors)
     # weighted=True: this figure draws no residual, so the unweighted
     # suffix output_basename adds for weighted=False would be meaningless
