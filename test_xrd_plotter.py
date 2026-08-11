@@ -313,6 +313,9 @@ def test_every_reflection_position_reaches_the_figure(tmp_path):
     and the drawn marks may drop, reorder or round one.
     """
     x = np.linspace(13.0, 85.0, 400)
+    # Awkward decimals on purpose, and arbitrary: this test is about a float
+    # surviving the read and the draw unaltered, so the positions stand for
+    # no material and match no pattern.
     alpha = [15.111111111111111, 22.987654321, 31.400000000000006,
              39.75, 44.123456, 52.9, 61.000000000001, 70.54321]
     beta = [19.5, 27.2, 36.0, 48.2, 57.0, 66.987654321]

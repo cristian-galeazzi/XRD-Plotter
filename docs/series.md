@@ -10,7 +10,9 @@ from a pile of separate figures and easy to read from one stack.
 
 Drawn from an invented pattern with two phases named `Phase 1` and `Phase 2`
 by [`make_examples.py`](make_examples.py), so it shows the layout and no
-measurement.
+measurement. Every reflection in it follows from Bragg's law on a cubic cell
+stated in that script, so the positions can be recomputed from the source
+rather than taken on trust.
 
 There are two ways to draw it, and they share every setting:
 
@@ -111,8 +113,8 @@ be picked from:
 
 ```
 reflections between 13 and 85 deg, to pick the guides from:
-  Phase 1: 30.95, 35.89, 51.67, 61.46, 64.51, 76.08, 84.37, 87.09
-  Phase 2: 21.14, 30.07, 37.04, 43.04
+  Phase 1: 30.95, 35.89, 51.67, 61.46, 64.51, 76.08, 84.37
+  Phase 2: 21.14, 30.07, 37.04, 43.04, 48.42, 53.39
 ```
 
 A phase whose export carries two reflection columns has both listed together

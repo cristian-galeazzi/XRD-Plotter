@@ -1,7 +1,12 @@
 """Regenerate the example figures in the README from an invented pattern.
 
-No measurement is read: the pattern below is analytic and the phases are
-called Phase 1 and Phase 2, so the images show the layout and nothing else.
+No measurement is read. The two phases are called Phase 1 and Phase 2, and
+their reflections are computed rather than written down: each one follows
+from Bragg's law applied to an invented cubic cell stated below, so a reader
+can recompute every position in the figures from three numbers on this page
+and confirm that nothing here was read off a diffractometer. The intensities
+are made up outright.
+
 The same invented material makes the series of five, which is written out as
 CSV exports first and then read back through make_series, so the example
 figure comes off the path a real run takes rather than off a shortcut.
@@ -10,6 +15,7 @@ Run from the repository root:
 
     python docs/make_examples.py
 """
+import math
 import sys
 import tempfile
 from pathlib import Path
@@ -23,9 +29,35 @@ import make_series as ms
 import xrd_plotter as xp
 
 N = 2000
-PEAKS_1 = [(30.95, 900), (35.89, 9000), (51.67, 2600), (61.46, 3000),
-           (64.51, 2400), (76.08, 700), (84.37, 800), (87.09, 400)]
-PEAKS_2 = [(21.14, 1500), (30.07, 500), (37.04, 700), (43.04, 600)]
+WAVELENGTH = 1.5406  # Cu K-alpha 1, in angstrom
+# Phase 1 is a face-centred cell, so only the unmixed hkl survive; Phase 2 is
+# primitive, so all of them do. Two cells close enough that their strongest
+# reflections nearly coincide, which is what gives the series figure a pair
+# of guides worth drawing side by side.
+CELL_1, HKL_1 = 5.00, ((1, 1, 1), (2, 0, 0), (2, 2, 0), (3, 1, 1),
+                       (2, 2, 2), (4, 0, 0), (3, 3, 1))
+CELL_2, HKL_2 = 4.20, ((1, 0, 0), (1, 1, 0), (1, 1, 1), (2, 0, 0),
+                       (2, 1, 0), (2, 1, 1))
+HEIGHTS_1 = (9000, 2600, 3000, 2400, 700, 900, 400)
+HEIGHTS_2 = (1500, 500, 700, 600, 300, 250)
+
+
+def two_theta(cell: float, hkl: tuple[int, int, int]) -> float:
+    """Bragg angle of one reflection of a cubic cell, in degrees 2theta.
+
+    >>> round(two_theta(5.00, (1, 1, 1)), 2)
+    30.95
+    >>> two_theta(5.00, (2, 0, 0)) > two_theta(5.00, (1, 1, 1))
+    True
+    """
+    spacing = cell / math.sqrt(sum(index ** 2 for index in hkl))
+    return 2.0 * math.degrees(math.asin(WAVELENGTH / (2.0 * spacing)))
+
+
+PEAKS_1 = [(two_theta(CELL_1, hkl), height)
+           for hkl, height in zip(HKL_1, HEIGHTS_1)]
+PEAKS_2 = [(two_theta(CELL_2, hkl), height)
+           for hkl, height in zip(HKL_2, HEIGHTS_2)]
 
 # The invented story the series tells, one entry per member: how far the
 # Phase 1 reflections have moved, how much Phase 2 there is, and the overall
@@ -38,7 +70,8 @@ SERIES = (("x = 0.00", 0.00, 0.05, 0.4),
           ("x = 0.40", 0.28, 1.00, 1.3))
 
 
-def pattern(shift: float = 0.0, second: float = 1.0, scale: float = 1.0):
+def pattern(shift: float = 0.0, second: float = 1.0, scale: float = 1.0
+            ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """One synthetic two-phase pattern with counting noise on the observed.
 
     'shift' moves the Phase 1 reflections, as a solid solution would;
@@ -64,7 +97,8 @@ def pattern(shift: float = 0.0, second: float = 1.0, scale: float = 1.0):
     return x, obs, calc, bkg
 
 
-def write_export(path: Path, x, obs, calc, bkg, shift: float) -> None:
+def write_export(path: Path, x: np.ndarray, obs: np.ndarray,
+                 calc: np.ndarray, bkg: np.ndarray, shift: float) -> None:
     """Write one pattern in the format the GSAS-II publication plot saves.
 
     The reflection columns hold one position per row and are blank below,
@@ -145,7 +179,9 @@ def main():
                              offset=1.35, label_height=0.90,
                              label_x=float("nan"), label_weight="bold",
                              tick_height=0.10, show_ticks=True,
-                             guide_lines=[30.95, 21.14], guide_snap=0.3,
+                             guide_lines=[two_theta(CELL_1, (1, 1, 1)),
+                                          two_theta(CELL_2, (1, 1, 0))],
+                             guide_snap=0.3,
                              guide_style=":", guide_width=1.2,
                              linewidth=0.9, use_sqrt=True,
                              window=(None, None))
