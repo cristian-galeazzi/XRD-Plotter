@@ -87,10 +87,14 @@ TICK_HEIGHT = 0.10
 # 2theta of the reflections to follow up through the stack, as dotted lines
 # in front of the traces, so a guide is not hidden by the dense stack of
 # patterns it is meant to be followed through. Empty draws none, which is
-# the default. Each value
-# snaps to the nearest reflection position, so a value read off the PDF by
-# eye still lands exactly on its tick:
+# the default. Each value snaps to the nearest reflection position, so a
+# value read off the PDF by eye still lands exactly on its tick:
 #   GUIDE_LINES = [30.9, 37.0]
+#
+# The one setting in this file that carries data rather than a preference: a
+# reflection position is a measurement, and a few of them identify the
+# phase. Empty it before committing, or set the guides in section 5 of the
+# notebook, where they stay in the widget. See docs/privacy.md.
 GUIDE_LINES: list[float] = []
 
 # How far a GUIDE_LINES value may sit from a reflection and still snap to

@@ -45,13 +45,21 @@ Unlike `Samples_metadata.csv`, [`make_series.py`](../make_series.py) is
 tracked: it is code, not data, so it ships in the repository. Which samples
 the stacked series holds, in which order and under which names, is not in
 it: that comes from the `series_order` and `series_label` columns of your
-own metadata file, which is excluded. What remains in the script is the
-appearance of the figure, the offsets and heights and colours, which says
-nothing about your samples. So nothing there has to be put back before a
-commit.
+own metadata file, which is excluded. What remains is the appearance of the
+figure, the offsets, heights and line widths, and none of those says
+anything about a sample.
 
-That property is worth keeping. A setting that would name one of your files
-belongs in the metadata beside the others, not here.
+One exception, and it is easy to miss because it sits among the appearance
+settings: **`GUIDE_LINES` holds 2θ positions you read off your own
+patterns.** A reflection position is a measurement. It gives a lattice
+spacing through Bragg's law, and a handful of them identify the phase, so a
+filled `GUIDE_LINES` is sample data wearing the clothes of a drawing option.
+Empty it before committing, or set the guides in section 5 of the notebook,
+where they stay in the widget and never reach the file.
+
+Everything else in that file can stay as you tuned it. Keep it that way: a
+setting that would name one of your files, or carry a number you measured,
+belongs in the metadata or in the notebook, not here.
 
 ## Phase names
 
