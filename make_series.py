@@ -293,7 +293,7 @@ def series_from_metadata(meta: pd.DataFrame) -> list[tuple[str, str | None]]:
 
 
 def load_series(entries: list[tuple[str, str | None]], data_folder: Path,
-                meta: pd.DataFrame
+                meta: pd.DataFrame, use_sqrt: bool | None = None
                 ) -> tuple[list[tuple[np.ndarray, np.ndarray, str]],
                            dict[str, np.ndarray], dict[str, str]]:
     """Read the series in order: (2theta, observed, label) per file.
@@ -303,6 +303,11 @@ def load_series(entries: list[tuple[str, str | None]], data_folder: Path,
     back to the 'formula' cell of that sample's metadata row, and then to
     the file name without its extension. The metadata arrives already
     loaded, so a run reads it once.
+
+    The square root is applied here rather than in plot_series, because it
+    transforms the data and not the drawing. A caller offering it as a
+    control has to pass the same value to both, or the axis would name a
+    transform nobody applied. None takes USE_SQRT.
 
     The reflection positions and the phase colour overrides come back
     separately, from the first file that carries a reflection column, since
@@ -315,6 +320,7 @@ def load_series(entries: list[tuple[str, str | None]], data_folder: Path,
     >>> load_series([], Path("data"), pd.DataFrame())
     ([], {}, {})
     """
+    use_sqrt = USE_SQRT if use_sqrt is None else use_sqrt
     traces: list[tuple[np.ndarray, np.ndarray, str]] = []
     phases: dict[str, np.ndarray] = {}
     colors: dict[str, str] = {}
@@ -329,7 +335,7 @@ def load_series(entries: list[tuple[str, str | None]], data_folder: Path,
         if error is not None:
             raise SystemExit(f"{filename}: {error}")
         theta, obs, _calc, _bkg, _resid, file_phases = xp.prepare_data(
-            data, phase_cols, use_sqrt=USE_SQRT)
+            data, phase_cols, use_sqrt=use_sqrt)
         name, _pct, file_colors, _window = xp.sample_info(meta, filename,
                                                           path.stem)
         traces.append((theta, obs,
@@ -341,10 +347,31 @@ def load_series(entries: list[tuple[str, str | None]], data_folder: Path,
 
 
 def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
-                phases: dict[str, np.ndarray],
-                offset: float = OFFSET,
-                colors: dict[str, str] | None = None) -> Figure:
+                phases: dict[str, np.ndarray], *,
+                colors: dict[str, str] | None = None,
+                offset: float | None = None,
+                label_height: float | None = None,
+                label_x: float | None = None,
+                label_weight: str | None = None,
+                tick_height: float | None = None,
+                show_ticks: bool | None = None,
+                guide_lines: list[float] | None = None,
+                guide_snap: float | None = None,
+                linewidth: float | None = None,
+                use_sqrt: bool | None = None,
+                window: tuple[float | None, float | None] | None = None
+                ) -> Figure:
     """Draw the stacked series on one set of axes; returns the Figure.
+
+    Every appearance setting can be given per call, and each one left as
+    None takes the module setting of the same meaning, so the notebook can
+    drive one redraw without writing to module state. 'label_x' is the one
+    exception: None means take LABEL_X, and a caller that wants the labels
+    pinned to the left border passes float('nan').
+
+    'use_sqrt' only names the axis. The transform itself belongs to
+    load_series, which reads the file, so a caller offering it as a control
+    passes the same value to both.
 
     Typical use, after load_series::
 
@@ -353,6 +380,24 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                                              DATA_FOLDER, meta)
         fig = plot_series(traces, phases, colors=colors)
     """
+    # One place where an argument falls back to its setting, so the rest of
+    # the body reads one name per value and never both.
+    offset = OFFSET if offset is None else offset
+    label_height = LABEL_HEIGHT if label_height is None else label_height
+    label_weight = LABEL_WEIGHT if label_weight is None else label_weight
+    tick_height = TICK_HEIGHT if tick_height is None else tick_height
+    show_ticks = SHOW_TICKS if show_ticks is None else show_ticks
+    guide_lines = GUIDE_LINES if guide_lines is None else guide_lines
+    guide_snap = GUIDE_SNAP if guide_snap is None else guide_snap
+    linewidth = LINEWIDTH_TRACE if linewidth is None else linewidth
+    use_sqrt = USE_SQRT if use_sqrt is None else use_sqrt
+    window = (PLOT_X_MIN, PLOT_X_MAX) if window is None else window
+    # NaN is the caller's way of asking for the left border, since None
+    # already means 'take the setting'. It is never a 2theta.
+    if label_x is None:
+        label_x = LABEL_X
+    left_border = label_x is None or label_x != label_x
+
     fig, ax = plt.subplots(figsize=(xp.FIGURE_WIDTH, xp.FIGURE_HEIGHT),
                            dpi=110)
     # The window is set before stack() runs, so the 0 to 1 span of a trace
@@ -363,7 +408,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     # peaks scale by different amounts, exactly the comparison the
     # normalisation exists to prevent.
     widest = xp.plot_window(np.concatenate([t for t, _o, _n in traces]),
-                            PLOT_X_MIN, PLOT_X_MAX)
+                            *window)
     x_low, x_high = widest
     scopes = []
     for theta, _obs, _name in traces:
@@ -385,43 +430,42 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     # trace above it.
     for (theta, _obs, _name), values, scope in zip(traces, stacked, scopes):
         ax.plot(theta[scope], values[scope], color=xp.COLOR_OBS,
-                lw=LINEWIDTH_TRACE, zorder=2)
+                lw=linewidth, zorder=2)
 
     # Labels sit inside the frame, above their own trace. The y is always a
     # data coordinate, so it follows the trace: stack() normalises every
     # pattern to a span of 1.0, so index * offset + 1.0 is the top of that
-    # trace and LABEL_HEIGHT moves the text down towards the pattern or up
-    # into the gap. The x is a real 2theta when LABEL_X names one, and an
-    # axes fraction otherwise, so the shipped default needs no window.
-    if LABEL_X is None:
+    # trace and label_height moves the text down towards the pattern or up
+    # into the gap. The x is a real 2theta when one is given, and an axes
+    # fraction otherwise, so the shipped default needs no window.
+    if left_border:
         placement = blended_transform_factory(ax.transAxes, ax.transData)
         label_x = 0.02
     else:
         placement = ax.transData
-        label_x = LABEL_X
     for index, (_theta, _obs, name) in enumerate(traces):
-        ax.text(label_x, index * offset + LABEL_HEIGHT, name,
+        ax.text(label_x, index * offset + label_height, name,
                 transform=placement, va="bottom", ha="left",
-                fontsize=xp.FONT_SIZE_LEGEND, fontweight=LABEL_WEIGHT)
+                fontsize=xp.FONT_SIZE_LEGEND, fontweight=label_weight)
 
     labels = {phase: xp.phase_label(phase) for phase in phases}
     ordered = sorted(phases, key=lambda phase: labels[phase])
     tick_colors = xp.phase_colors([labels[phase] for phase in ordered],
                                   colors)
     rows = 0
-    pitch = (TICK_HEIGHT + 0.02) * offset  # 0.02 of clearance between rows
+    pitch = (tick_height + 0.02) * offset  # 0.02 of clearance between rows
     # The tick block hangs below the bottom trace by 0.05 of a trace height,
-    # whatever TICK_HEIGHT is. Derived from it rather than written out again,
+    # whatever tick_height is. Derived from it rather than written out again,
     # so a taller tick moves the block down instead of growing into the
     # pattern above it.
-    block_top = -(TICK_HEIGHT + 0.05) * offset
+    block_top = -(tick_height + 0.05) * offset
     listed: dict[str, np.ndarray] = {}
-    if SHOW_TICKS:
+    if show_ticks:
         for phase in ordered:
             locations = reflections_in_window(phases[phase], widest)
             if len(locations):
                 row_y = block_top - rows * pitch
-                ax.vlines(locations, row_y, row_y + TICK_HEIGHT * offset,
+                ax.vlines(locations, row_y, row_y + tick_height * offset,
                           colors=tick_colors[labels[phase]],
                           lw=xp.LINEWIDTH_TICKS, zorder=3)
                 # Two columns can carry the same phase name, and the legend
@@ -433,8 +477,8 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                     if labels[phase] in listed else locations)
                 rows += 1
 
-        # Printed so a GUIDE_LINES value is picked from the reflections that
-        # are actually there rather than read off the drawn figure by eye.
+        # Printed so a guide value is picked from the reflections that are
+        # actually there rather than read off the drawn figure by eye.
         if listed:
             print(f"reflections between {widest[0]:g} and {widest[1]:g} deg, "
                   "for GUIDE_LINES:")
@@ -445,13 +489,13 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         # a dense stack of patterns is not hidden by them and a tick can
         # still be followed up to the peak it belongs to. axvline works in
         # axes fractions vertically, so it does not depend on the limits
-        # being set yet. Nested under SHOW_TICKS: a guide exists only to
+        # being set yet. Nested under show_ticks: a guide exists only to
         # connect a tick to a peak, so with the ticks off there is nothing
         # left for it to point at.
-        for value in GUIDE_LINES:
-            snapped, owner = snap_to_phase(value, listed, GUIDE_SNAP)
+        for value in guide_lines:
+            snapped, owner = snap_to_phase(value, listed, guide_snap)
             if snapped is None:
-                print(f"  ! no reflection within {GUIDE_SNAP:g} deg of "
+                print(f"  ! no reflection within {guide_snap:g} deg of "
                       f"{value:g}, no guide drawn")
                 continue
             # Coloured like the tick it came from, so the guide says which
@@ -475,7 +519,7 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                       handlelength=1, handletextpad=1)
 
     ax.set_xlabel(r"$2\theta\:/\:^\circ$", fontsize=xp.FONT_SIZE_LABEL)
-    ax.set_ylabel(r"$\sqrt{\mathrm{Intensity}}$ / a.u." if USE_SQRT
+    ax.set_ylabel(r"$\sqrt{\mathrm{Intensity}}$ / a.u." if use_sqrt
                   else r"Intensity / a.u.", fontsize=xp.FONT_SIZE_LABEL,
                   labelpad=10)
     ax.set_xlim(*widest)
@@ -483,10 +527,10 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                         if rows else -0.05 * offset),
                 # 0.08 was clearance for a curve. A line of text needs the
                 # same room the labels get between traces, or the topmost
-                # one is cut by the frame. max(1.0, LABEL_HEIGHT): the top
-                # of the trace is at 1.0, but LABEL_HEIGHT may sit above
+                # one is cut by the frame. max(1.0, label_height): the top
+                # of the trace is at 1.0, but label_height may sit above
                 # it, and the frame has to clear whichever is higher.
-                top=(len(traces) - 1) * offset + max(1.0, LABEL_HEIGHT)
+                top=(len(traces) - 1) * offset + max(1.0, label_height)
                 + 0.30 * offset)
     # No numbers on the intensity axis, for the reason the module gives: the
     # unit is arbitrary, and here the normalisation makes a comparison of

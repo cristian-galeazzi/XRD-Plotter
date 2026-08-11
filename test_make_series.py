@@ -728,3 +728,96 @@ def test_the_module_holds_no_list_of_file_names():
     """The point of this task: no setting an owner fills with real names."""
     assert not hasattr(ms, "SERIES")
     assert not hasattr(ms, "SERIES_LABELS")
+
+
+def test_the_arguments_win_over_the_module_settings(series):
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, offset=2.0, label_height=1.5)
+    placed = sorted(t.get_position()[1] for t in fig.axes[0].texts)
+    assert placed == [1.5, 3.5]
+    plt_close(fig)
+
+
+def test_passing_nothing_draws_what_the_settings_say(series):
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases)
+    placed = sorted(t.get_position()[1] for t in fig.axes[0].texts)
+    assert placed == [0.90, 2.25]
+    plt_close(fig)
+
+
+def test_a_nan_label_x_pins_the_labels_to_the_left_border(series,
+                                                          monkeypatch):
+    monkeypatch.setattr(ms, "LABEL_X", 18.0)
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, label_x=float("nan"))
+    label = fig.axes[0].texts[0]
+    assert 0.0 <= label.get_position()[0] < 0.1
+    assert label.get_transform() is not fig.axes[0].transData
+    plt_close(fig)
+
+
+def test_a_label_x_argument_wins_over_the_setting(series, monkeypatch):
+    monkeypatch.setattr(ms, "LABEL_X", None)
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, label_x=18.0)
+    assert fig.axes[0].texts[0].get_position()[0] == 18.0
+    plt_close(fig)
+
+
+def test_the_window_argument_wins_over_the_module_window(series,
+                                                          monkeypatch):
+    monkeypatch.setattr(ms, "PLOT_X_MIN", None)
+    monkeypatch.setattr(ms, "PLOT_X_MAX", None)
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, window=(15.0, 40.0))
+    assert fig.axes[0].get_xlim() == (15.0, 40.0)
+    plt_close(fig)
+
+
+def test_the_guides_can_be_given_per_call(series, monkeypatch):
+    monkeypatch.setattr(ms, "GUIDE_LINES", [])
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.1])
+    guides = [line for line in fig.axes[0].lines
+              if line.get_linestyle() in (":", "dotted")]
+    assert len(guides) == 1
+    plt_close(fig)
+
+
+def test_the_ticks_can_be_turned_off_per_call(series):
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, show_ticks=False)
+    assert len(fig.axes[0].collections) == 0
+    assert fig.axes[0].get_legend() is None
+    plt_close(fig)
+
+
+def test_the_axis_label_follows_the_sqrt_argument(series, monkeypatch):
+    monkeypatch.setattr(ms, "USE_SQRT", True)
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, use_sqrt=False)
+    assert fig.axes[0].get_ylabel() == r"Intensity / a.u."
+    plt_close(fig)
+
+
+def test_the_sqrt_argument_reaches_the_data_and_not_just_the_label(series):
+    """A caller toggling sqrt must get the transform, not only the label.
+
+    The square root is applied where the file is read, so a plot_series
+    that relabelled the axis on its own would name a transform nobody
+    applied.
+    """
+    linear, _phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame(), use_sqrt=False)
+    rooted, _phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame(), use_sqrt=True)
+    assert np.allclose(np.sqrt(linear[0][1]), rooted[0][1])
