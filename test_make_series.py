@@ -6,6 +6,7 @@ matplotlib.use("Agg")  # no display in CI, same as test_xrd_plotter.py
 import numpy as np
 import pytest
 from matplotlib.colors import to_rgba
+from matplotlib.figure import Figure
 from matplotlib.pyplot import close as plt_close
 
 import make_series as ms
@@ -95,8 +96,9 @@ def series(tmp_path):
 
 
 def test_every_named_file_becomes_one_trace(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
+                                             series,
+                                             tmp_path / "absent_metadata.csv")
     assert len(traces) == 3
     assert phases, "the reflection column should be read as a phase"
 
@@ -108,14 +110,15 @@ def test_a_missing_file_stops_the_run_and_names_itself(series, tmp_path):
 
 def test_the_trace_label_falls_back_to_the_file_stem(series, tmp_path):
     traces, _, _colors = ms.load_series(["s2.csv"], series,
-                               tmp_path / "absent_metadata.csv")
+                                        tmp_path / "absent_metadata.csv")
     assert traces[0][2] == "s2"
 
 
 def test_the_figure_carries_one_line_and_one_label_per_sample(series,
                                                               tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
+                                             series,
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
     assert len(ax.lines) == 3
@@ -126,8 +129,9 @@ def test_the_figure_carries_one_line_and_one_label_per_sample(series,
 def test_the_strongest_sample_does_not_overrun_the_trace_above(series,
                                                               tmp_path):
     """s3 scatters many times harder than s1; normalisation must hide that."""
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
+                                             series,
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.5)
     tops = [float(line.get_ydata().max()) for line in fig.axes[0].lines]
     assert tops[0] < 1.5 and tops[1] < 3.0
@@ -136,7 +140,7 @@ def test_the_strongest_sample_does_not_overrun_the_trace_above(series,
 
 def test_the_intensity_axis_carries_no_numbers(series, tmp_path):
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     ax = fig.axes[0]
     assert ax.get_yticklabels() == [] or not any(
@@ -154,7 +158,7 @@ def test_a_written_label_wins_over_the_metadata_formula(series, tmp_path):
     meta = tmp_path / "meta.csv"
     write_metadata(meta, "s1.csv", "Formula From Metadata")
     traces, _, _colors = ms.load_series(["s1.csv"], series, meta,
-                               labels={"s1.csv": "Label I Wrote"})
+                                        labels={"s1.csv": "Label I Wrote"})
     assert traces[0][2] == "Label I Wrote"
 
 
@@ -168,8 +172,8 @@ def test_without_a_written_label_the_metadata_formula_is_used(series,
 
 def test_a_label_written_for_another_file_does_not_leak(series, tmp_path):
     traces, _, _colors = ms.load_series(["s1.csv"], series,
-                               tmp_path / "absent_metadata.csv",
-                               labels={"s2.csv": "Label I Wrote"})
+                                        tmp_path / "absent_metadata.csv",
+                                        labels={"s2.csv": "Label I Wrote"})
     assert traces[0][2] == "s1"
 
 
@@ -178,8 +182,9 @@ def test_the_module_ships_no_labels_of_its_own():
 
 
 def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
+                                             series,
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.35)
     placed = {text.get_text(): text.get_position()[1]
               for text in fig.axes[0].texts}
@@ -191,7 +196,7 @@ def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
 
 def test_the_labels_are_right_aligned_inside_the_frame(series, tmp_path):
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     label = fig.axes[0].texts[0]
     assert label.get_ha() == "right"
@@ -200,8 +205,9 @@ def test_the_labels_are_right_aligned_inside_the_frame(series, tmp_path):
 
 
 def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
-    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+    traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
+                                             series,
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.35)
     ax = fig.axes[0]
     highest_label = max(text.get_position()[1] for text in ax.texts)
@@ -212,7 +218,7 @@ def test_the_topmost_label_is_not_cut_off_by_the_frame(series, tmp_path):
 
 def test_the_phase_legend_has_no_frame(series, tmp_path):
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     assert fig.axes[0].get_legend().get_frame_on() is False
     plt_close(fig)
@@ -247,7 +253,7 @@ def test_a_guide_is_drawn_at_the_reflection_not_at_the_typed_value(
     # default 0.3 tolerance, so the guide must land on 20.0.
     monkeypatch.setattr(ms, "GUIDE_LINES", [20.2])
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     guides = [line for line in fig.axes[0].lines
               if line.get_linestyle() in (":", "dotted")]
@@ -260,7 +266,7 @@ def test_a_guide_with_no_reflection_near_it_is_reported_and_not_drawn(
         series, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(ms, "GUIDE_LINES", [24.0])
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     guides = [line for line in fig.axes[0].lines
               if line.get_linestyle() in (":", "dotted")]
@@ -271,7 +277,7 @@ def test_a_guide_with_no_reflection_near_it_is_reported_and_not_drawn(
 
 def test_no_guides_are_drawn_by_default(series, tmp_path):
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     assert [line for line in fig.axes[0].lines
             if line.get_linestyle() in (":", "dotted")] == []
@@ -282,7 +288,7 @@ def test_the_ticks_are_taller_than_the_traces_are_apart_is_not_the_case(
         series, tmp_path):
     """A tick row must fit under the bottom trace without reaching it."""
     traces, phases, _colors = ms.load_series(["s1.csv"], series,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases, offset=1.35)
     ax = fig.axes[0]
     tick_collection = ax.collections[0]
@@ -306,7 +312,8 @@ def test_the_window_not_the_off_window_peak_sets_the_normalisation(
     monkeypatch.setattr(ms, "PLOT_X_MIN", 15.0)
     monkeypatch.setattr(ms, "PLOT_X_MAX", 25.0)
     traces, phases, _colors = ms.load_series(["plain.csv", "loaded.csv"],
-                                    folder, tmp_path / "absent_metadata.csv")
+                                             folder,
+                                             tmp_path / "absent_metadata.csv")
     fig = ms.plot_series(traces, phases)
     tops = []
     for line in fig.axes[0].lines:
@@ -319,6 +326,55 @@ def test_the_window_not_the_off_window_peak_sets_the_normalisation(
     assert tops[0] == pytest.approx(tops[1], abs=0.05), (
         "an off-window peak must not change how tall the two samples "
         "compare inside the window")
+    plt_close(fig)
+
+
+def test_the_drawn_line_does_not_spike_at_the_window_edge(tmp_path,
+                                                           monkeypatch):
+    """A grid point just outside the window must not draw a spike.
+
+    The window edge sits between two grid points, 25.0 inside and 25.5
+    outside. Plotting the whole trace would draw the segment between them
+    across the frame, interpolated to a height set by the tall off-window
+    point; plotting only the scope slice must not.
+    """
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export_two_peaks(folder / "spiked.csv", near_peak=20.0,
+                           near_height=5.0, far_peak=27.0, far_height=9000.0)
+    monkeypatch.setattr(ms, "PLOT_X_MIN", 15.0)
+    monkeypatch.setattr(ms, "PLOT_X_MAX", 25.25)
+    traces, phases, _colors = ms.load_series(["spiked.csv"], folder,
+                                             tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    values = fig.axes[0].lines[0].get_ydata()
+    assert float(np.max(values)) < 1.5, (
+        "the drawn line must not spike far above the trace's own slot")
+    plt_close(fig)
+
+
+def test_a_trace_entirely_outside_the_window_still_draws(tmp_path,
+                                                          monkeypatch):
+    """A member whose whole measured range misses the window must not raise."""
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "inside.csv", peak_at=20.0, height=900.0)
+    angles = np.arange(60.0, 70.0, 0.5)
+    obs = 100.0 + 900.0 * np.exp(-((angles - 65.0) ** 2) / 0.5)
+    lines = [HEADER]
+    for i, (angle, value) in enumerate(zip(angles, obs)):
+        reflection = "65.00" if i == 0 else ""
+        lines.append(f"{angle:.2f};{value:.4f};{value:.4f};100.0;0.1;"
+                     f"{reflection}")
+    (folder / "outside.csv").write_text("\n".join(lines) + "\n",
+                                        encoding="utf-8")
+    monkeypatch.setattr(ms, "PLOT_X_MIN", 10.0)
+    monkeypatch.setattr(ms, "PLOT_X_MAX", 50.0)
+    traces, phases, _colors = ms.load_series(["inside.csv", "outside.csv"],
+                                             folder,
+                                             tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases)
+    assert isinstance(fig, Figure)
     plt_close(fig)
 
 
@@ -363,7 +419,7 @@ def test_the_second_tick_row_sits_one_pitch_below_the_first(tmp_path):
     folder.mkdir()
     write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
     traces, phases, _colors = ms.load_series(["two.csv"], folder,
-                                    tmp_path / "absent_metadata.csv")
+                                             tmp_path / "absent_metadata.csv")
     offset = 1.35
     fig = ms.plot_series(traces, phases, offset=offset)
     ax = fig.axes[0]

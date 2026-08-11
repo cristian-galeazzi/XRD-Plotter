@@ -6,10 +6,11 @@ figures. The refined fit, the background and the residual stay in the
 per-sample figures the notebook writes; this one answers a different
 question, which reflection appears, moves or goes away across the series.
 
-The tick rows and the guides are read from the first file in SERIES only,
-one row of ticks per phase for the whole series rather than one per sample.
-In a series drawn precisely because reflections move, remember that the
-ticks are anchored to that one file and not to every trace on top of them.
+The tick rows and the guides are read from the first file in SERIES that
+has any reflections, one row of ticks per phase for the whole series
+rather than one per sample. In a series drawn precisely because
+reflections move, remember that the ticks are anchored to that one file
+and not to every trace on top of them.
 
 Run it from the repository root, with the exports already in data/::
 
@@ -49,9 +50,9 @@ SERIES_LABELS: dict[str, str] = {}
 # where every pattern spans 1.0 from baseline to tallest reflection. The
 # 0.35 above a full trace is the room its label needs: below about 1.25 the
 # text lands on the trace above it. Raise it to spread a long series out.
-# Past roughly a dozen traces the room a label needs, fixed in points, closes
-# whatever OFFSET is, since xp.FIGURE_HEIGHT does not grow with the series:
-# a long series needs that raised too.
+# Past roughly a dozen traces, OFFSET buys label room only by squeezing the
+# patterns themselves, since xp.FIGURE_HEIGHT is fixed and does not grow
+# with the series: a long series wants that raised too.
 OFFSET = 1.35
 
 # One row of reflection ticks per phase, below the bottom trace, in the
@@ -234,9 +235,15 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     # scale to decode, and the vertical position already says which sample
     # is which. Line, not the scatter of the per-sample figure: at this
     # density the markers of six patterns merge into a block.
-    for (theta, _obs, _name), values in zip(traces, stacked):
-        ax.plot(theta, values, color=xp.COLOR_OBS, lw=LINEWIDTH_TRACE,
-                zorder=2)
+    #
+    # Sliced to the scope, not the whole trace: a point outside the window
+    # can land far above 1.0 once normalised, and set_xlim discards it
+    # anyway. Plotting it regardless would draw the segment crossing the
+    # window edge up to that off-scale height, a spike cutting across every
+    # trace above it.
+    for (theta, _obs, _name), values, scope in zip(traces, stacked, scopes):
+        ax.plot(theta[scope], values[scope], color=xp.COLOR_OBS,
+                lw=LINEWIDTH_TRACE, zorder=2)
 
     # Labels sit inside the frame, right-aligned, in the gap above their own
     # trace: the axes fraction pins them to the right border, the data
