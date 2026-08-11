@@ -34,7 +34,14 @@ jobs:
       # docstring examples run beside it: they are the documentation a reader
       # meets first, so they are held to the same gate as the assertions.
       - name: Run the validation suite
-        run: pytest -q --doctest-modules xrd_plotter.py test_xrd_plotter.py make_series.py test_make_series.py
+        run: pytest -q --doctest-modules xrd_plotter.py test_xrd_plotter.py make_series.py test_make_series.py docs/make_examples.py
+      # The example figures in the README are drawn by that script, so it has
+      # to keep running: a change that broke it would otherwise be noticed
+      # only the next time someone regenerated them. The images it writes are
+      # not compared, since matplotlib and freetype render a glyph
+      # differently between versions.
+      - name: Redraw the example figures
+        run: python docs/make_examples.py
       # The notebook is a second target: it must still import the engine,
       # run the suite and reach the batch cell, which finds data/ empty and
       # reports it instead of failing.

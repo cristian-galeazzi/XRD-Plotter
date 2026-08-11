@@ -18,6 +18,8 @@ printed on the figure, and √I is applied to the drawn copy alone.
 run time from an analytic pattern with a fixed seed (`default_rng(0)`). It
 reads nothing from `data/`, so it runs on any machine, including a fresh
 clone with an empty data folder.
+[`test_make_series.py`](../test_make_series.py) does the same for the
+stacked figure.
 
 ```bash
 pytest -q
@@ -27,7 +29,7 @@ The docstring examples are tests too. CI runs them beside the suite, and you
 can:
 
 ```bash
-pytest -q --doctest-modules xrd_plotter.py test_xrd_plotter.py
+pytest -q --doctest-modules xrd_plotter.py test_xrd_plotter.py make_series.py test_make_series.py docs/make_examples.py
 ```
 
 Section 2 of the notebook calls the same suite, so running the notebook is a
@@ -91,6 +93,10 @@ floor the README claims and on the version this is developed with.
 | The window section 4 prefills from a metadata row | The `x_min`/`x_max` pair read back, blank cells and an absent file giving the widen-to-full sentinel |
 | A batch of four files: good, broken, header still shifted, good | The two good ones written as PDF and PNG, the two bad ones isolated with a reason, each block printing name, phases, window and output in that order, and both failures repeated in the summary at the end |
 | A batch run with `WEIGHTED_RESIDUALS = False` | The panel, its label and the file name agree, so the `_unweighted` figure never lands under the weighted name |
+| The stacked series read from the metadata | The `series_order` number ordering the traces rather than the row position, a blank cell passed over and an unreadable one reported by name, `series_label` winning over `formula`, and no list of file names left in the module |
+| The per-trace rescaling of the stack | Every pattern normalised to its own span inside the plotted window, so an off-window peak cannot flatten a trace, and a flat pattern sitting on its baseline instead of becoming NaN |
+| The stacked figure's labels, ticks and guides | One label per trace at its own height, a guide snapping to a real reflection and taking the colour of the phase that owns it, a value with nothing near it reported and not drawn, and a phase with no reflection in the window getting neither tick row nor legend entry |
+| Every appearance setting given to `plot_series` per call | The argument winning over the module constant, and the module constant used when the caller passes nothing, so the notebook drives a redraw without writing to module state |
 
 ## What validation does not cover
 

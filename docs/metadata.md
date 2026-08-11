@@ -15,6 +15,8 @@ sample identities live, so it stays a single file you control, and
 |--------|----------|---------|
 | `filename` (or `file`) | Yes | Name of the data file this row describes |
 | `formula` | No | Display name for the figure legend |
+| `series_order` | No | A number puts this sample in the stacked series at that position, the smallest at the bottom. Blank leaves it out |
+| `series_label` | No | Name for this sample's trace in the stacked series, when it should differ from `formula` |
 | `<phase>_pct`, one per phase | No | Fraction (%) appended to that phase's legend entry |
 | `<phase>_color`, one per phase | No | Tick and legend colour for that phase, as `#RRGGBB` or a matplotlib colour name |
 | `x_min`, `x_max` | No | 2θ window for this sample alone, in degrees |
@@ -123,3 +125,30 @@ sample_3.csv;Sample 3;15;80
 Paste it into `Samples_metadata.csv` and section 3 draws that sample this way
 on every run. The intensity limits stay in the panel, since they depend on
 `USE_SQRT` and describe a look rather than a fact about the sample.
+
+## The stacked series
+
+`series_order` is what decides the stacked figure of section 5: a sample
+joins it by carrying a number, and the numbers only have to sort, so 10, 20,
+30 leaves room to insert one later without renumbering the rest. A sample
+with no number keeps its own figure and stays out of the series.
+
+```
+filename;formula;series_order;series_label
+sample_1.csv;$\mathrm{Mg_2SiO_4}$;1;x = 0.00
+sample_2.csv;$\mathrm{Mg_2SiO_4}$;2;x = 0.10
+sample_9.csv;$\mathrm{SiO_2}$;;
+```
+
+`series_label` exists because the two figures want different names: the
+single figure has room for a formula, a stacked trace usually does not. Left
+blank it falls back to `formula`, and then to the file name. It accepts the
+same maths notation as `formula`.
+
+A cell holding something that is not a number is reported by name and that
+sample is left out, rather than being dropped in silence: a typo in one cell
+would otherwise remove a sample from the figure without saying so. A blank
+cell is a choice and is passed over quietly.
+
+Nothing about your samples reaches [`make_series.py`](../make_series.py),
+which holds the appearance of the figure and nothing else.

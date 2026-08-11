@@ -20,9 +20,10 @@ the uncertainty of its own point, holds the lower panel in a band a few units
 wide. The linear axis and the raw difference show the intensity as it is, with
 the strongest reflection dominating both panels.
 
-Both figures come from an invented pattern with two phases named `Phase 1`
-and `Phase 2`, drawn by [`docs/make_examples.py`](docs/make_examples.py), so
-they show the layout and no measurement. Your own phase names replace them.
+Every figure on this page comes from an invented pattern with two phases
+named `Phase 1` and `Phase 2`, drawn by
+[`docs/make_examples.py`](docs/make_examples.py), so they show the layout and
+no measurement. Your own phase names replace them.
 
 ## Quick start
 
@@ -71,10 +72,10 @@ You end up with this. Your own files go in two places: the exports in `data/`,
 the optional metadata file beside the notebook.
 
 ```
-XRD_Rietveld_Plotter.ipynb   <- the four sections you run
+XRD_Rietveld_Plotter.ipynb   <- the five sections you run
 xrd_plotter.py               <- the engine, imported by the notebook
 test_xrd_plotter.py          <- the validation suite
-make_series.py               <- optional, one stacked figure for a whole series
+make_series.py               <- one stacked figure for a whole series, section 5
 test_make_series.py          <- its validation suite
 requirements.txt             <- the six packages, for the terminal route
 Samples_metadata.csv         <- optional, yours, never committed
@@ -134,13 +135,26 @@ without looking pasted in. Importing the module is what sets it, on the
 matplotlib defaults rather than on one figure, so anything else you draw in
 the same kernel is set in that face too.
 
-For a series of samples, [`make_series.py`](make_series.py) draws one figure
-instead of several: the observed patterns and the reflection ticks, without
-the fit or the residual, each pattern rescaled to the same height and offset
-above the one below, in the order you list in `SERIES` at the top of the
-script. Run it with `python make_series.py`. Rescaling per trace is what
-keeps a weak sample visible beside a strong one, and it is also why no
-height in that figure may be compared with another.
+## A whole series as one figure
+
+Where the sections above draw one sample per figure,
+[`make_series.py`](make_series.py) draws a series as one: the observed
+patterns and the reflection ticks, without the fit or the residual, each
+pattern rescaled to the same height and offset above the one below.
+
+![Five diffraction patterns stacked one above another on a square-root intensity axis, each labelled at its left with a composition, one row of orange and one of blue reflection ticks below the lowest pattern, and two dotted vertical guides rising through the stack in the colour of the phase that owns the reflection they mark.](docs/example_series.png)
+
+Which samples it holds and in which order comes from the `series_order`
+column of your metadata file, and `series_label` names each trace, so no
+sample name is ever typed into the code. Run it with `python
+make_series.py`, or use section 5 of the notebook, which redraws it live
+while you move the window, the spacing and the guides.
+
+Rescaling per trace is what keeps a weak sample visible beside a strong one,
+and it is also why **no height in that figure may be compared with
+another**. The ticks and the guides are read from the first member of the
+series, so in a series drawn because a reflection moves, they mark where it
+started rather than where each trace has it.
 
 ## Settings
 
@@ -170,7 +184,9 @@ file in place on every change and prints the metadata row for the window on
 screen. Its Save to output button writes that window to `output/` under the
 batch name, with `_linear` or `_unweighted` when its two checkboxes differ
 from the batch, so a preview never overwrites a batch figure. Every other
-control there previews only.
+control there previews only. Section 5 works the same way on the stacked
+figure, and prints the reflection positions it drew, which is where the
+guide values are picked from rather than read off the figure by eye.
 
 ## What it accepts
 
