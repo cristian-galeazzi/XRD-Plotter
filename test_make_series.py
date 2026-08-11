@@ -107,3 +107,36 @@ def test_the_intensity_axis_carries_no_numbers(series, tmp_path):
     assert ax.get_yticklabels() == [] or not any(
         label.get_visible() for label in ax.get_yticklabels())
     plt_close(fig)
+
+
+def write_metadata(path, filename, formula):
+    """A one-row private metadata file, the format load_metadata expects."""
+    path.write_text(f"filename;formula\n{filename};{formula}\n",
+                    encoding="utf-8")
+
+
+def test_a_written_label_wins_over_the_metadata_formula(series, tmp_path):
+    meta = tmp_path / "meta.csv"
+    write_metadata(meta, "s1.csv", "Formula From Metadata")
+    traces, _ = ms.load_series(["s1.csv"], series, meta,
+                               labels={"s1.csv": "Label I Wrote"})
+    assert traces[0][2] == "Label I Wrote"
+
+
+def test_without_a_written_label_the_metadata_formula_is_used(series,
+                                                              tmp_path):
+    meta = tmp_path / "meta.csv"
+    write_metadata(meta, "s1.csv", "Formula From Metadata")
+    traces, _ = ms.load_series(["s1.csv"], series, meta, labels={})
+    assert traces[0][2] == "Formula From Metadata"
+
+
+def test_a_label_written_for_another_file_does_not_leak(series, tmp_path):
+    traces, _ = ms.load_series(["s1.csv"], series,
+                               tmp_path / "absent_metadata.csv",
+                               labels={"s2.csv": "Label I Wrote"})
+    assert traces[0][2] == "s1"
+
+
+def test_the_module_ships_no_labels_of_its_own():
+    assert ms.SERIES_LABELS == {}

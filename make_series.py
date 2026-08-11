@@ -35,6 +35,11 @@ SERIES: list[str] = [
     "sample_3.csv",
 ]
 
+# Legend text per file, winning over the 'formula' column of the metadata.
+# Empty leaves the behaviour as it is: the metadata first, then the file
+# stem. The key is the file name as it appears in SERIES.
+SERIES_LABELS: dict[str, str] = {}
+
 # Vertical gap between traces, in the normalised units stack() produces,
 # where every pattern spans 1.0 from baseline to tallest reflection. Above
 # 1.0 leaves clear air between traces, below 1.0 lets them overlap, which
@@ -93,10 +98,15 @@ def stack(patterns: list[np.ndarray],
     return stacked
 
 
-def load_series(filenames: list[str], data_folder: Path, metadata_file: Path
+def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
+                labels: dict[str, str] | None = None
                 ) -> tuple[list[tuple[np.ndarray, np.ndarray, str]],
                            dict[str, np.ndarray]]:
     """Read the series in order: (2theta, observed, label) per file.
+
+    The label is what SERIES_LABELS says for that file name, or the
+    'formula' cell of its metadata row, or the file stem, first hit
+    winning. 'labels' overrides the SERIES_LABELS constant for this call.
 
     The reflection positions come back separately, from the first file that
     has any, since one row of ticks per phase is drawn for the series rather
@@ -106,6 +116,7 @@ def load_series(filenames: list[str], data_folder: Path, metadata_file: Path
     >>> load_series([], Path("data"), Path("nowhere.csv"))
     ([], {})
     """
+    overrides = SERIES_LABELS if labels is None else labels
     meta = xp.load_metadata(metadata_file)
     traces: list[tuple[np.ndarray, np.ndarray, str]] = []
     phases: dict[str, np.ndarray] = {}
@@ -123,7 +134,9 @@ def load_series(filenames: list[str], data_folder: Path, metadata_file: Path
             data, phase_cols, use_sqrt=USE_SQRT)
         name, _pct, _colors, _window = xp.sample_info(meta, filename,
                                                       path.stem)
-        traces.append((theta, obs, name))
+        # get with a default rather than 'or': a label deliberately set to
+        # an empty string stays empty instead of falling back.
+        traces.append((theta, obs, overrides.get(filename, name)))
         if not phases:
             phases = file_phases
     return traces, phases
