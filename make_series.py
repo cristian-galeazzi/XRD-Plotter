@@ -22,6 +22,7 @@ It writes output/pdf/ and output/png/ like the notebook does.
 """
 from __future__ import annotations
 
+import textwrap
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -159,6 +160,50 @@ def snap_to_reflection(value: float, positions: np.ndarray,
     return nearest if abs(nearest - value) <= tolerance else None
 
 
+def reflections_in_window(positions: np.ndarray,
+                          window: tuple[float, float] | None = None
+                          ) -> np.ndarray:
+    """The drawable reflection positions of one phase, inside the window.
+
+    A reflection sits at a real angle, so a zero left in a phase column is
+    padding rather than a position and is dropped. Outside the plotted
+    window a position is neither drawn nor worth listing, so the window
+    filters it out too. This is the one place that decides what counts as a
+    reflection, so the ticks, the guide snapping and the printed list can
+    never disagree.
+
+    >>> reflections_in_window(np.array([0.0, 30.95, 90.0]), (13.0, 85.0))
+    array([30.95])
+    >>> reflections_in_window(np.array([0.0, 30.95, 90.0])).tolist()
+    [30.95, 90.0]
+    """
+    drawable = positions[positions > 0.1]
+    if window is None:
+        return drawable
+    low, high = window
+    return drawable[(drawable >= low) & (drawable <= high)]
+
+
+def format_reflections(rows: dict[str, np.ndarray]) -> str:
+    """One line per phase, its reflections ready to paste into GUIDE_LINES.
+
+    >>> print(format_reflections({"Phase 1": np.array([30.95, 37.04])}))
+      Phase 1: 30.95, 37.04
+    >>> format_reflections({})
+    ''
+    """
+    lines = []
+    for label, positions in rows.items():
+        values = ", ".join(f"{p:.2f}" for p in positions)
+        # Wrapped rather than run off the terminal: a phase can carry
+        # dozens of reflections and the point of printing them is that they
+        # can be read and picked from.
+        lines.extend(textwrap.wrap(f"{label}: {values}", width=76,
+                                   initial_indent="  ",
+                                   subsequent_indent="    "))
+    return "\n".join(lines)
+
+
 def load_series(filenames: list[str], data_folder: Path, metadata_file: Path,
                 labels: dict[str, str] | None = None
                 ) -> tuple[list[tuple[np.ndarray, np.ndarray, str]],
@@ -277,18 +322,25 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     # pattern above it.
     block_top = -(TICK_HEIGHT + 0.05) * offset
     drawn: list[np.ndarray] = []
+    listed: dict[str, np.ndarray] = {}
     if SHOW_TICKS:
         for phase in ordered:
-            # A reflection sits at a real angle, so a zero in a phase column
-            # is padding and would draw a tick against the left border.
-            locations = phases[phase][phases[phase] > 0.1]
+            locations = reflections_in_window(phases[phase], widest)
             if len(locations):
                 row_y = block_top - rows * pitch
                 ax.vlines(locations, row_y, row_y + TICK_HEIGHT * offset,
                           colors=tick_colors[labels[phase]],
                           lw=xp.LINEWIDTH_TICKS, zorder=3)
                 drawn.append(locations)
+                listed[labels[phase]] = locations
                 rows += 1
+
+        # Printed so a GUIDE_LINES value is picked from the reflections that
+        # are actually there rather than read off the drawn figure by eye.
+        if listed:
+            print(f"reflections between {widest[0]:g} and {widest[1]:g} deg, "
+                  "for GUIDE_LINES:")
+            print(format_reflections(listed))
 
         # Guides span the full height of the axes, behind the black traces,
         # so a tick can be followed up to the peak it belongs to. axvline

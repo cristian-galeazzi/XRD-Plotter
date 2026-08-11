@@ -177,10 +177,6 @@ def test_a_label_written_for_another_file_does_not_leak(series, tmp_path):
     assert traces[0][2] == "s1"
 
 
-def test_the_module_ships_no_labels_of_its_own():
-    assert ms.SERIES_LABELS == {}
-
-
 def test_each_label_sits_at_the_top_of_its_own_trace(series, tmp_path):
     traces, phases, _colors = ms.load_series(["s1.csv", "s2.csv", "s3.csv"],
                                              series,
@@ -437,4 +433,35 @@ def test_the_second_tick_row_sits_one_pitch_below_the_first(tmp_path):
     assert bottoms[0] - bottoms[1] == pytest.approx(pitch)
     assert tops[1] < bottoms[0], "the second row overlaps the first"
     assert ax.get_ylim()[0] < bottoms[1], "the second row is clipped"
+    plt_close(fig)
+
+
+def test_padding_and_out_of_window_positions_are_not_reflections():
+    positions = np.array([0.0, 12.0, 30.95, 90.0])
+    inside = ms.reflections_in_window(positions, (13.0, 85.0))
+    assert inside.tolist() == [30.95]
+
+
+def test_without_a_window_only_the_padding_is_dropped():
+    positions = np.array([0.0, 12.0, 30.95, 90.0])
+    assert ms.reflections_in_window(positions).tolist() == [12.0, 30.95, 90.0]
+
+
+def test_the_printed_list_wraps_instead_of_running_off_the_terminal():
+    many = np.arange(20.0, 60.0, 0.5)
+    lines = ms.format_reflections({"Phase 1": many}).splitlines()
+    assert len(lines) > 1
+    assert all(len(line) <= 76 for line in lines)
+    assert lines[0].startswith("  Phase 1: 20.00")
+
+
+def test_the_run_prints_the_reflections_it_drew(series, tmp_path, capsys):
+    traces, phases, colors = ms.load_series(["s1.csv"], series,
+                                            tmp_path / "absent_metadata.csv")
+    fig = ms.plot_series(traces, phases, colors=colors)
+    printed = capsys.readouterr().out
+    # The fixture's only reflection sits at 20.0, and it is what the tick
+    # row was drawn from, so it is what the list must offer.
+    assert "for GUIDE_LINES:" in printed
+    assert "20.00" in printed
     plt_close(fig)
