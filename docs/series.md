@@ -14,9 +14,11 @@ measurement.
 
 There are two ways to draw it, and they share every setting:
 
-- **Section 5 of the notebook**, which redraws in place while you change a
-  control and writes the files when you press a button. Use this while you
-  are still deciding what the figure should look like.
+- **Section 5 of the notebook**, which redraws in place on every change and
+  writes the two files when you press *Save PDF and PNG*. Each box there
+  shows its default greyed inside it and the useful range beside it, so an
+  empty box is never a mystery. Use this while you are still deciding what
+  the figure should look like.
 - **`python make_series.py`** from the repository root, which draws it once
   from the settings written at the top of that file. Use this to reproduce a
   figure you have already settled.
