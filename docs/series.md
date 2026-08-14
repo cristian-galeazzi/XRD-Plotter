@@ -6,7 +6,7 @@ this figure answers a different question from the per-sample ones. Which
 reflection appears, moves or goes away across the series is hard to read
 from a pile of separate figures and easy to read from one stack.
 
-![Five diffraction patterns stacked one above another on a square-root intensity axis, each labelled at its left with a composition, one row of orange and one of blue reflection ticks below the lowest pattern, and two dotted vertical guides rising through the stack in the colour of the phase that owns the reflection they mark, each named with its Miller index over its own peak on the top pattern, the taller peak carrying its name higher.](example_series.png)
+![Five diffraction patterns stacked one above another on a square-root intensity axis, each labelled at its left with a composition, one row of orange and one of blue reflection ticks below the lowest pattern, and two dotted vertical guides rising through the stack in the colour of the phase that owns the reflection they mark, each named with its Miller index standing on end over its own peak on the top pattern, the taller peak carrying its name higher.](example_series.png)
 
 Drawn from an invented pattern with two phases named `Phase 1` and `Phase 2`
 by [`make_examples.py`](make_examples.py), so it shows the layout and no
@@ -78,7 +78,7 @@ Widths are in points, matplotlib's own unit for a line.
 | guides 2θ, after `=` | `GUIDE_LABELS` | none | The name written over each guide, one per `GUIDE_LINES` value and in the same order. In section 5 the two are typed as one entry, `30.95=(111)`. Drawn over its own peak on the topmost pattern, in the colour of the phase the guide landed on |
 | name weight | `GUIDE_LABEL_WEIGHT` | `bold` | Weight of those names: `normal`, `medium`, `semibold` or `bold`. Its own control rather than `LABEL_WEIGHT`, since a name sits over a peak and in the open, while a trace label lies across a whole pattern |
 | name clearance | `GUIDE_LABEL_HEIGHT` | `0.20` | The room each name keeps over the pattern beneath it, in trace heights, measured over the whole width the name covers and not at the one angle its guide sits at. `0.0` rests a name on what it stands over. It is a clearance and not a height: the names sit at as many heights as the pattern under them has |
-| name angle | `GUIDE_LABEL_ROTATION` | `0` | `0` writes the names across, `90` on end. Across, a Miller index covers a few degrees of the axis and reaches its neighbours, so a crowded group of reflections becomes a staircase of names climbing away from their peaks. On end the same name covers about the width of one line of text, and the same group stands side by side, each on its own peak |
+| name angle | `GUIDE_LABEL_ROTATION` | `90` | `90` stands the names on end, reading upwards; `0` writes them across. Across, a Miller index covers a few degrees of the axis and reaches its neighbours, so a crowded group of reflections becomes a staircase of names climbing away from their peaks. On end the same name covers about the width of one line of text, and the same group stands side by side, each on its own peak, which is why it ships that way. Turn it back to `0` for a figure with a handful of well separated reflections, where a name read across is the easier of the two |
 | guide style | `GUIDE_STYLE` | `:` dotted | `:` dotted, `--` dashed, `-.` dash-dot, `-` solid |
 | guide width | `GUIDE_WIDTH` | `1.2` | Width of a guide. Past the width of the traces it crosses, a guide hides the peak it points at |
 | (not a control) | `GUIDE_SNAP` | `0.3` | How far a typed guide may sit from a reflection and still snap to it, in degrees |
@@ -140,10 +140,13 @@ the position, separated by `=`, so the two cannot fall out of step:
 
 The name is written over its own peak on the topmost pattern, centred on its
 guide and in the colour of the phase the guide landed on, so nothing has to
-be added to the legend to explain it. It is drawn exactly as typed, which is
-how an overbar is written: `30.95=$(\bar{1}11)$` uses the same STIX maths as
-the axis labels. An entry with no `=` is an unnamed guide, as before, and an
-entry that cannot be read is reported and left out.
+be added to the legend to explain it. It stands on end and reads upwards,
+which is what lets neighbouring reflections keep their names side by side;
+*name angle* writes them across instead, for a figure with few enough
+reflections that they do not reach each other. It is drawn exactly as typed,
+which is how an overbar is written: `30.95=$(\bar{1}11)$` uses the same STIX
+maths as the axis labels. An entry with no `=` is an unnamed guide, as
+before, and an entry that cannot be read is reported and left out.
 
 ### Why the names are not all at one height
 
@@ -165,12 +168,14 @@ figure first.
 
 Lifting is the last resort, and it is worth avoiding rather than tuning: a
 staircase of names climbing away from the peaks they belong to is what a
-reader has to decode. What causes it is width. A name like `(889)` covers
-some two and a half degrees of a forty degree axis when it is written
-across, and about one degree when `GUIDE_LABEL_ROTATION` turns it on end,
-so the same crowded group that has to be stacked one way stands side by side
-the other. Nothing else changes with the turn: the names are measured as
-they are drawn, so the clearance and the lifting follow it on their own.
+reader has to decode. What causes it is width, which is why the names ship
+on end. A name like `(889)` covers some two and a half degrees of a forty
+degree axis when it is written across, and about one degree when it stands
+on end, so the same crowded group that has to be stacked one way stands side
+by side the other. Nothing else changes with the turn: the names are
+measured as they are drawn, so the clearance and the lifting follow it on
+their own. `GUIDE_LABEL_ROTATION = 0` writes them across, which reads more
+easily where the reflections are far enough apart to allow it.
 
 A reflection the topmost trace no longer has puts its name at that trace's
 baseline, low, where the peak is not. In a series drawn because a phase

@@ -209,18 +209,20 @@ GUIDE_LABEL_WEIGHT = "bold"
 # This is the clearance each name gets, not one height for all of them.
 GUIDE_LABEL_HEIGHT = 0.20
 
-# Angle of the names, in degrees anticlockwise from upright. 0 writes them
-# across, 90 on end, reading upwards from just above the peak.
+# Angle of the names, in degrees anticlockwise from upright. 90 writes them
+# on end, reading upwards from just above the peak; 0 writes them across.
 #
 # It is the one setting that decides whether crowded names can be read at
-# all. Upright, a Miller index covers some two degrees of a seventy degree
-# axis and reaches its neighbours, so a group of reflections close together
-# ends up as a staircase of names climbing away from the peaks they belong
-# to. On end the same name covers about the width of one line of text, and
-# the same group stands side by side, each over its own peak. Nothing else
-# changes: the names are measured as they are drawn, so the clearance and
-# the lifting follow the turn on their own.
-GUIDE_LABEL_ROTATION = 0
+# all, which is why it ships on end. Across, a Miller index covers some two
+# degrees of a seventy degree axis and reaches its neighbours, so a group of
+# reflections close together ends up as a staircase of names climbing away
+# from the peaks they belong to. On end the same name covers about the width
+# of one line of text, and the same group stands side by side, each over its
+# own peak. Turn it back to 0 for a figure with a handful of well separated
+# reflections, where a name read across is the easier of the two. Nothing
+# else changes: the names are measured as they are drawn, so the clearance
+# and the lifting follow the turn on their own.
+GUIDE_LABEL_ROTATION = 90
 
 # --- Where the files are ------------------------------------------------
 DATA_FOLDER = Path("data")

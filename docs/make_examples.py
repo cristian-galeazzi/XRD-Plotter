@@ -200,6 +200,8 @@ def main():
                              guide_labels=[hkl_label((1, 1, 1)),
                                            hkl_label((1, 1, 0))],
                              guide_label_weight="bold",
+                             guide_label_height=0.20,
+                             guide_label_rotation=90,
                              guide_snap=0.3,
                              guide_style=":", guide_width=1.2,
                              linewidth=0.9, use_sqrt=True,

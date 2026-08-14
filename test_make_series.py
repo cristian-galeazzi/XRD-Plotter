@@ -28,7 +28,8 @@ def shipped_defaults(monkeypatch):
     """
     for name, value in (("GUIDE_LINES", []), ("GUIDE_LABELS", []),
                         ("GUIDE_LABEL_WEIGHT", "bold"),
-                        ("GUIDE_LABEL_HEIGHT", 0.20), ("LABEL_X", None),
+                        ("GUIDE_LABEL_HEIGHT", 0.20),
+                        ("GUIDE_LABEL_ROTATION", 90), ("LABEL_X", None),
                         ("LABEL_WEIGHT", "normal"), ("USE_SQRT", True),
                         ("PLOT_X_MIN", None), ("PLOT_X_MAX", None),
                         ("LABEL_HEIGHT", 0.90), ("SHOW_TICKS", True),
@@ -1034,7 +1035,7 @@ def test_a_turned_name_covers_far_less_of_the_axis(series):
     traces, phases, _colors = ms.load_series(
             no_labels("s1.csv"), series, pd.DataFrame())
     flat = ms.plot_series(traces, phases, guide_lines=[20.2],
-                          guide_labels=["(889)"])
+                          guide_labels=["(889)"], guide_label_rotation=0)
     turned = ms.plot_series(traces, phases, guide_lines=[20.2],
                             guide_labels=["(889)"], guide_label_rotation=90)
     wide = label_width_in_degrees(flat, guide_names(flat.axes[0])[0])
@@ -1058,7 +1059,8 @@ def test_two_names_that_collide_upright_stand_side_by_side_turned(tmp_path):
             no_labels("two.csv"), folder, pd.DataFrame())
     upright = ms.plot_series(traces, phases, colors=colors,
                              guide_lines=[20.0, 21.5],
-                             guide_labels=["(889)", "(123)"])
+                             guide_labels=["(889)", "(123)"],
+                             guide_label_rotation=0)
     turned = ms.plot_series(traces, phases, colors=colors,
                             guide_lines=[20.0, 21.5],
                             guide_labels=["(889)", "(123)"],
@@ -1080,14 +1082,21 @@ def test_two_names_that_collide_upright_stand_side_by_side_turned(tmp_path):
     plt_close(turned)
 
 
-def test_the_turn_falls_back_to_its_setting(series, monkeypatch):
-    monkeypatch.setattr(ms, "GUIDE_LABEL_ROTATION", 90)
+def test_a_name_stands_on_end_unless_the_setting_says_otherwise(series,
+                                                                monkeypatch):
+    """The shipped angle, and that turning it back reaches the figure."""
     traces, phases, _colors = ms.load_series(
             no_labels("s1.csv"), series, pd.DataFrame())
-    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
-                         guide_labels=["(110)"])
-    assert guide_names(fig.axes[0])[0].get_rotation() == pytest.approx(90.0)
-    plt_close(fig)
+    shipped = ms.plot_series(traces, phases, guide_lines=[20.2],
+                             guide_labels=["(110)"])
+    assert guide_names(shipped.axes[0])[0].get_rotation() == pytest.approx(
+        90.0)
+    monkeypatch.setattr(ms, "GUIDE_LABEL_ROTATION", 0)
+    across = ms.plot_series(traces, phases, guide_lines=[20.2],
+                            guide_labels=["(110)"])
+    assert guide_names(across.axes[0])[0].get_rotation() == pytest.approx(0.0)
+    plt_close(shipped)
+    plt_close(across)
 
 
 def test_a_taller_peak_under_the_name_lifts_it(tmp_path):
@@ -1096,6 +1105,7 @@ def test_a_taller_peak_under_the_name_lifts_it(tmp_path):
     A name is about two degrees wide on a forty degree axis. Measured at its
     own reflection alone, it would clear that peak and land on the taller
     one beside it, which is what a reader sees as a name stuck to a peak.
+    Written across, since that is the width that reaches the neighbour.
     """
     folder = tmp_path / "data"
     folder.mkdir()
@@ -1112,7 +1122,8 @@ def test_a_taller_peak_under_the_name_lifts_it(tmp_path):
     traces, phases, _colors = ms.load_series(
             no_labels("pair.csv"), folder, pd.DataFrame())
     fig = ms.plot_series(traces, phases, guide_lines=[20.0],
-                         guide_labels=["(110)"], guide_label_height=0.10)
+                         guide_labels=["(110)"], guide_label_height=0.10,
+                         guide_label_rotation=0)
     ax = fig.axes[0]
     # The tall peak reaches 1.0, since stack() normalises the trace to it.
     assert guide_names(ax)[0].get_position()[1] == pytest.approx(1.10)
