@@ -53,7 +53,7 @@ Four of those settings are the exception, and they are easy to miss because
 they sit among the appearance ones. **Anything in degrees 2θ is a position
 you read off your own patterns, not a preference.** A reflection position is
 a measurement: it gives a lattice spacing through Bragg's law, and a handful
-of them identify the phase. The four:
+of them identify the phase. The four, and one that pairs with the first:
 
 | Setting | What a filled value says |
 |---|---|
@@ -61,7 +61,13 @@ of them identify the phase. The four:
 | `PLOT_X_MIN`, `PLOT_X_MAX` | A window framing the reflection the series is about says where that reflection is |
 | `LABEL_X` | Names an empty stretch of your figure, so it says where the reflections are not. Weaker, but still a position |
 
-All four ship unset and should stay that way. Set them in section 5 of the
+`GUIDE_LABELS` is the fifth, and it is the one not in degrees. A Miller index
+gives no lattice spacing on its own, but it names a reflection you picked out
+of your own pattern and it is written beside the position it belongs to, so
+it ships empty too and CI refuses a filled one. Section 5 takes the position
+and the name as one entry, `30.95=(111)`, and keeps both in the widget.
+
+All five ship unset and should stay that way. Set them in section 5 of the
 notebook, where they stay in the widget and never reach a file, or, for the
 window, per sample through the `x_min`/`x_max` columns of your metadata. CI
 refuses a commit that carries any of them tuned, so a forgotten one is

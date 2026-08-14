@@ -26,7 +26,9 @@ def shipped_defaults(monkeypatch):
     test that read a setting off the module would pass in CI and fail on
     their machine.
     """
-    for name, value in (("GUIDE_LINES", []), ("LABEL_X", None),
+    for name, value in (("GUIDE_LINES", []), ("GUIDE_LABELS", []),
+                        ("GUIDE_LABEL_WEIGHT", "bold"),
+                        ("GUIDE_LABEL_HEIGHT", 0.20), ("LABEL_X", None),
                         ("LABEL_WEIGHT", "normal"), ("USE_SQRT", True),
                         ("PLOT_X_MIN", None), ("PLOT_X_MAX", None),
                         ("LABEL_HEIGHT", 0.90), ("SHOW_TICKS", True),
@@ -904,16 +906,583 @@ def test_the_guides_survive_the_ticks_being_turned_off(series, capsys):
     traces, phases, _colors = ms.load_series(
             no_labels("s1.csv"), series, pd.DataFrame())
     fig = ms.plot_series(traces, phases, show_ticks=False,
-                         guide_lines=[20.1], guide_style=":")
+                         guide_lines=[20.1], guide_labels=["(110)"],
+                         guide_style=":")
     ax = fig.axes[0]
     assert len(ax.collections) == 0, "no tick row should be drawn"
     assert ax.get_legend() is None, "no legend without the rows it names"
+    # The name goes with the guide, and the room made for it is measured
+    # against a legend that is not there.
+    assert [text.get_text() for text in ax.texts
+            if text.get_ha() == "center"] == ["(110)"]
     guides = [line for line in ax.lines
               if line.get_linestyle() in (":", "dotted")]
     assert len(guides) == 1, "the guide went away with the ticks"
     # The list is what a guide value is picked from, so it has to survive too.
     assert "to pick the guides from" in capsys.readouterr().out
     plt_close(fig)
+
+
+def guide_names(ax):
+    """The names written over the guides, told apart from the trace labels.
+
+    A trace label starts at its own x and runs rightwards; a guide name is
+    centred on the guide it belongs to, and that is enough to find them.
+    """
+    return [text for text in ax.texts if text.get_ha() == "center"]
+
+
+def test_a_guide_name_is_written_over_its_own_guide(series):
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
+                         guide_labels=["(110)"])
+    names = guide_names(fig.axes[0])
+    assert [text.get_text() for text in names] == ["(110)"]
+    # On the reflection, not on the typed value: the guide snapped and the
+    # name has to travel with it.
+    assert names[0].get_position()[0] == pytest.approx(20.0)
+    plt_close(fig)
+
+
+def test_a_guide_name_takes_the_colour_of_its_phase(tmp_path):
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "two.csv", 20.0, 900.0, second_phase=30.0)
+    traces, phases, colors = ms.load_series(
+            no_labels("two.csv"), folder, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, colors=colors, guide_lines=[30.1],
+                         guide_labels=["(110)"])
+    ax = fig.axes[0]
+    # The tick rows are drawn as collections, in legend order; the second
+    # phase owns the reflection at 30.0, so its row is the second one.
+    assert to_rgba(guide_names(ax)[0].get_color()) == to_rgba(
+        ax.collections[1].get_colors()[0])
+    plt_close(fig)
+
+
+def test_a_guide_with_no_name_gets_no_text(series):
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
+                         guide_labels=[""])
+    assert guide_names(fig.axes[0]) == []
+    plt_close(fig)
+
+
+def test_a_guide_that_does_not_snap_takes_its_name_with_it(series, capsys):
+    """The name that survives is the one of the guide that survived.
+
+    Names pair with positions by their place in the list, so a guide dropped
+    for having no reflection near it must not shift the name of the next one
+    onto itself.
+    """
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[24.0, 20.2],
+                         guide_labels=["(999)", "(110)"])
+    assert [text.get_text()
+            for text in guide_names(fig.axes[0])] == ["(110)"]
+    assert "no reflection within" in capsys.readouterr().out
+    plt_close(fig)
+
+
+def test_two_names_too_close_together_are_stacked_not_overlapped(tmp_path):
+    folder = tmp_path / "data"
+    folder.mkdir()
+    # Two reflections a fifth of a degree apart: their names cannot sit side
+    # by side in a forty degree window.
+    write_export(folder / "two.csv", 20.0, 900.0, second_phase=20.2)
+    traces, phases, colors = ms.load_series(
+            no_labels("two.csv"), folder, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, colors=colors,
+                         guide_lines=[20.0, 20.2],
+                         guide_labels=["(111)", "(110)"])
+    fig.canvas.draw()
+    first, second = (text.get_window_extent()
+                     for text in guide_names(fig.axes[0]))
+    assert not first.overlaps(second)
+    plt_close(fig)
+
+
+def test_a_name_sits_above_its_own_peak(series):
+    """The top trace's peak here reaches 1.0, since stack() normalises it."""
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
+                         guide_labels=["(110)"], guide_label_height=0.10)
+    assert guide_names(fig.axes[0])[0].get_position()[1] == pytest.approx(1.10)
+    plt_close(fig)
+
+
+def label_width_in_degrees(fig, text):
+    """How much of the 2theta axis one name covers, as it is drawn."""
+    fig.canvas.draw()
+    box = text.get_window_extent()
+    inverse = fig.axes[0].transData.inverted()
+    return (inverse.transform((box.x1, 0.0))[0]
+            - inverse.transform((box.x0, 0.0))[0])
+
+
+def test_a_turned_name_covers_far_less_of_the_axis(series):
+    """Turning a name is what stops it colliding, so this is the mechanism.
+
+    Upright, a Miller index is some two degrees wide on a forty degree axis
+    and reaches its neighbours; on end it is about as wide as one line of
+    text is tall.
+    """
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    flat = ms.plot_series(traces, phases, guide_lines=[20.2],
+                          guide_labels=["(889)"])
+    turned = ms.plot_series(traces, phases, guide_lines=[20.2],
+                            guide_labels=["(889)"], guide_label_rotation=90)
+    wide = label_width_in_degrees(flat, guide_names(flat.axes[0])[0])
+    narrow = label_width_in_degrees(turned, guide_names(turned.axes[0])[0])
+    assert narrow < wide / 2
+    plt_close(flat)
+    plt_close(turned)
+
+
+def test_two_names_that_collide_upright_stand_side_by_side_turned(tmp_path):
+    """The crowded case the turn exists for.
+
+    Two reflections a degree and a half apart, on an axis where a name is
+    two and a half degrees wide upright and one degree on end: upright the
+    two have to be stacked, turned they stand side by side.
+    """
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "two.csv", 20.0, 900.0, second_phase=21.5)
+    traces, phases, colors = ms.load_series(
+            no_labels("two.csv"), folder, pd.DataFrame())
+    upright = ms.plot_series(traces, phases, colors=colors,
+                             guide_lines=[20.0, 21.5],
+                             guide_labels=["(889)", "(123)"])
+    turned = ms.plot_series(traces, phases, colors=colors,
+                            guide_lines=[20.0, 21.5],
+                            guide_labels=["(889)", "(123)"],
+                            guide_label_rotation=90)
+
+    def spans(fig):
+        fig.canvas.draw()
+        inverse = fig.axes[0].transData.inverted()
+        return sorted(
+            (inverse.transform((text.get_window_extent().x0, 0.0))[0],
+             inverse.transform((text.get_window_extent().x1, 0.0))[0])
+            for text in guide_names(fig.axes[0]))
+
+    (_first_left, first_right), (second_left, _second_right) = spans(upright)
+    assert first_right > second_left, "upright, the two names reach each other"
+    (_first_left, first_right), (second_left, _second_right) = spans(turned)
+    assert first_right < second_left, "turned, they stand clear side by side"
+    plt_close(upright)
+    plt_close(turned)
+
+
+def test_the_turn_falls_back_to_its_setting(series, monkeypatch):
+    monkeypatch.setattr(ms, "GUIDE_LABEL_ROTATION", 90)
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
+                         guide_labels=["(110)"])
+    assert guide_names(fig.axes[0])[0].get_rotation() == pytest.approx(90.0)
+    plt_close(fig)
+
+
+def test_a_taller_peak_under_the_name_lifts_it(tmp_path):
+    """The clearance is over everything the name covers, not over one point.
+
+    A name is about two degrees wide on a forty degree axis. Measured at its
+    own reflection alone, it would clear that peak and land on the taller
+    one beside it, which is what a reader sees as a name stuck to a peak.
+    """
+    folder = tmp_path / "data"
+    folder.mkdir()
+    angles = np.arange(10.0, 50.0, 0.5)
+    # A small peak at the reflection, a tall one under the same name.
+    obs = (100.0 + 200.0 * np.exp(-((angles - 20.0) ** 2) / 0.5)
+           + 4000.0 * np.exp(-((angles - 20.8) ** 2) / 0.5))
+    lines = [HEADER]
+    for index, (angle, value) in enumerate(zip(angles, obs)):
+        reflection = "20.00" if index == 0 else ""
+        lines.append(f"{angle:.2f};{value:.4f};{value:.4f};100.0;0.1;"
+                     f"{reflection}")
+    (folder / "pair.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    traces, phases, _colors = ms.load_series(
+            no_labels("pair.csv"), folder, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.0],
+                         guide_labels=["(110)"], guide_label_height=0.10)
+    ax = fig.axes[0]
+    # The tall peak reaches 1.0, since stack() normalises the trace to it.
+    assert guide_names(ax)[0].get_position()[1] == pytest.approx(1.10)
+    plt_close(fig)
+
+
+def test_a_name_on_a_reflection_the_top_trace_lost_sits_at_its_baseline(
+        series):
+    """A phase that went away must not have its name floating over nothing.
+
+    The second sample's peak is elsewhere, so at the first sample's
+    reflection the top trace is flat, and the name belongs down there where
+    the peak is not rather than up at the height of the tallest one.
+    """
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, offset=1.35, guide_lines=[20.2],
+                         guide_labels=["(110)"], guide_label_height=0.10)
+    baseline_of_the_top_trace = 1.35
+    assert guide_names(fig.axes[0])[0].get_position()[1] == pytest.approx(
+        baseline_of_the_top_trace + 0.10)
+    plt_close(fig)
+
+
+@pytest.fixture
+def edge_series(tmp_path):
+    """Two series of three, one reflection at the left, one at the right.
+
+    Three traces because the taller the stack, the less of the figure the
+    clearance above it is worth, and the right-hand one because a name there
+    lands under the phase legend.
+    """
+    folder = tmp_path / "data"
+    folder.mkdir()
+    for index in range(1, 4):
+        write_export(folder / f"left{index}.csv", 12.0, 900.0)
+        write_export(folder / f"right{index}.csv", 48.0, 900.0)
+    return folder
+
+
+def test_the_frame_is_raised_to_hold_a_name_under_the_legend(edge_series):
+    """A full stack has no spare room above it, so the frame has to grow."""
+    traces, phases, _colors = ms.load_series(
+            no_labels("right1.csv", "right2.csv", "right3.csv"), edge_series,
+            pd.DataFrame())
+    plain = ms.plot_series(traces, phases, guide_lines=[48.0])
+    named = ms.plot_series(traces, phases, guide_lines=[48.0],
+                           guide_labels=["(110)"])
+    assert named.axes[0].get_ylim()[1] > plain.axes[0].get_ylim()[1]
+    plt_close(plain)
+    plt_close(named)
+
+
+def test_the_frame_is_not_raised_when_no_guide_is_named(series):
+    """A figure without names is the figure this repository already drew."""
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv", "s2.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, offset=1.35, label_height=0.90,
+                         guide_lines=[20.2])
+    assert fig.axes[0].get_ylim()[1] == pytest.approx(1.35 + 1.0 + 0.30 * 1.35)
+    plt_close(fig)
+
+
+def test_a_name_under_the_legend_never_reaches_it(tmp_path):
+    """The legend hangs from the top of the frame, and the names rise to it.
+
+    A reflection at the right of the window puts its name directly under the
+    legend, which is the collision the extra room exists to prevent, so it
+    is asserted on the drawn boxes rather than on the setting meant to
+    avoid it.
+    """
+    folder = tmp_path / "data"
+    folder.mkdir()
+    write_export(folder / "right.csv", 48.0, 900.0)
+    traces, phases, _colors = ms.load_series(
+            no_labels("right.csv"), folder, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[48.0],
+                         guide_labels=["(110)"])
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    legend = ax.get_legend().get_window_extent()
+    names = guide_names(ax)
+    assert names, "the name was not drawn at all"
+    assert not any(text.get_window_extent().overlaps(legend)
+                   for text in names)
+    plt_close(fig)
+
+
+def test_the_room_comes_from_a_taller_figure_and_not_from_the_stack(
+        edge_series):
+    """Making room must not cost the patterns any of the figure.
+
+    A series is drawn to show the small reflections, and they are the first
+    thing lost when the stack is squeezed to fit something above it. The
+    check is the scale itself, pixels per trace height, which has to come
+    out the same whether or not the guides were named.
+    """
+    def scale_of(fig):
+        fig.canvas.draw()
+        ax = fig.axes[0]
+        low, high = ax.get_ylim()
+        return ax.get_window_extent().height / (high - low)
+
+    traces, phases, _colors = ms.load_series(
+            no_labels("right1.csv", "right2.csv", "right3.csv"), edge_series,
+            pd.DataFrame())
+    plain = ms.plot_series(traces, phases, guide_lines=[48.0])
+    named = ms.plot_series(traces, phases, guide_lines=[48.0],
+                           guide_labels=["(110)"])
+    assert scale_of(named) == pytest.approx(scale_of(plain), rel=0.01)
+    assert (named.get_size_inches()[1] > plain.get_size_inches()[1]), (
+        "the figure did not grow, so the room came out of the stack")
+    assert named.get_size_inches()[0] == plain.get_size_inches()[0], (
+        "the width must not move: it is what the figure is scaled to on a "
+        "page, and the patterns would shrink with it")
+    plt_close(plain)
+    plt_close(named)
+
+
+def test_a_name_clear_of_the_legend_does_not_pay_for_it(edge_series):
+    """Room for the legend is made only where a name stands under it.
+
+    Reserving its height for a name at the other end of the axis opened a
+    band of empty figure above every stack, which is what this refuses.
+    """
+    left, left_phases, _colors = ms.load_series(
+            no_labels("left1.csv", "left2.csv", "left3.csv"), edge_series,
+            pd.DataFrame())
+    right, right_phases, _colors = ms.load_series(
+            no_labels("right1.csv", "right2.csv", "right3.csv"), edge_series,
+            pd.DataFrame())
+    away = ms.plot_series(left, left_phases, guide_lines=[12.0],
+                          guide_labels=["(110)"])
+    under = ms.plot_series(right, right_phases, guide_lines=[48.0],
+                           guide_labels=["(110)"])
+    assert away.axes[0].get_ylim()[1] < under.axes[0].get_ylim()[1]
+    plt_close(away)
+    plt_close(under)
+
+
+def test_a_name_on_a_guide_at_the_border_stays_inside_the_frame(series):
+    """Centred on a guide at the edge, a name would hang outside the axes.
+
+    bbox_inches='tight' would then widen the saved figure around it, so the
+    name is nudged in far enough to fit and sits a little off its own guide.
+    """
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, window=(20.0, 40.0),
+                         guide_lines=[20.2], guide_labels=["(110)"])
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    frame = ax.get_window_extent()
+    box = guide_names(ax)[0].get_window_extent()
+    assert box.x0 >= frame.x0 and box.x1 <= frame.x1
+    plt_close(fig)
+
+
+def test_more_names_than_guides_is_reported(series, capsys):
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
+                         guide_labels=["(110)", "(200)"])
+    assert "2 names for 1 guides" in capsys.readouterr().out
+    assert len(guide_names(fig.axes[0])) == 1
+    plt_close(fig)
+
+
+def test_names_past_what_the_figure_can_grow_to_hold_are_reported(tmp_path,
+                                                                  capsys):
+    """More rows than a doubled figure can carry must not fail in silence.
+
+    Forty-five reflections a hundredth of a degree apart cannot share a row
+    at any window, so their names ask for more rows than the figure is
+    allowed to grow into. The run has to say so: the alternative is a saved
+    PDF with its top rows cut off and nothing to explain why.
+    """
+    folder = tmp_path / "data"
+    folder.mkdir()
+    crowded = [20.0 + step / 100 for step in range(45)]
+    # A fine step keeps the reflection column well under PHASE_MAX_FILL, so
+    # the parser still reads it as a phase and not as a data column. The
+    # peak they all sit on puts every name at the top of the trace, which is
+    # where there is no room left to climb into.
+    angles = np.arange(10.0, 50.0, 0.1)
+    obs = 100.0 + 900.0 * np.exp(-((angles - 20.2) ** 2) / 0.5)
+    lines = [HEADER]
+    for index, (angle, value) in enumerate(zip(angles, obs)):
+        reflection = f"{crowded[index]:.2f}" if index < len(crowded) else ""
+        lines.append(f"{angle:.2f};{value:.4f};{value:.4f};100.0;0.1;"
+                     f"{reflection}")
+    (folder / "crowded.csv").write_text("\n".join(lines) + "\n",
+                                        encoding="utf-8")
+    traces, phases, _colors = ms.load_series(
+            no_labels("crowded.csv"), folder, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=crowded,
+                         guide_labels=["(111)"] * len(crowded))
+    assert ("more room than the figure can grow to hold"
+            in capsys.readouterr().out)
+    # Grown as far as it is allowed to and no further.
+    assert fig.get_size_inches()[1] <= 2 * xp.FIGURE_HEIGHT
+    plt_close(fig)
+
+
+def test_the_name_height_is_measured_from_the_peak(series):
+    """The one value is the clearance over the peak, not a height above it."""
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    on_it = ms.plot_series(traces, phases, guide_lines=[20.2],
+                           guide_labels=["(110)"], guide_label_height=0.0)
+    above = ms.plot_series(traces, phases, guide_lines=[20.2],
+                           guide_labels=["(110)"], guide_label_height=0.40)
+    peak = 1.0
+    assert guide_names(on_it.axes[0])[0].get_position()[1] == pytest.approx(
+        peak)
+    assert guide_names(above.axes[0])[0].get_position()[1] == pytest.approx(
+        peak + 0.40)
+    plt_close(on_it)
+    plt_close(above)
+
+
+def test_the_name_height_falls_back_to_its_setting(series, monkeypatch):
+    monkeypatch.setattr(ms, "GUIDE_LABEL_HEIGHT", 0.50)
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, label_height=0.90,
+                         guide_lines=[20.2], guide_labels=["(110)"])
+    assert guide_names(fig.axes[0])[0].get_position()[1] == pytest.approx(1.50)
+    plt_close(fig)
+
+
+def test_the_names_fall_back_to_the_settings(series, monkeypatch):
+    monkeypatch.setattr(ms, "GUIDE_LINES", [20.2])
+    monkeypatch.setattr(ms, "GUIDE_LABELS", ["(110)"])
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases)
+    assert [text.get_text()
+            for text in guide_names(fig.axes[0])] == ["(110)"]
+    plt_close(fig)
+
+
+def test_the_name_weight_is_its_own_control(series, monkeypatch):
+    """The names carry their own weight, not the one the trace labels have.
+
+    A name sits alone above the stack and a trace label sits over a pattern,
+    so the reader picks what separates each of them best.
+    """
+    monkeypatch.setattr(ms, "GUIDE_LABEL_WEIGHT", "normal")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
+                         guide_labels=["(110)"], label_weight="bold",
+                         guide_label_weight="semibold")
+    ax = fig.axes[0]
+    assert ax.texts[0].get_fontweight() == "bold"       # the trace label
+    assert guide_names(ax)[0].get_fontweight() == "semibold"
+    plt_close(fig)
+
+
+def test_the_name_weight_falls_back_to_its_setting(series, monkeypatch):
+    monkeypatch.setattr(ms, "GUIDE_LABEL_WEIGHT", "normal")
+    traces, phases, _colors = ms.load_series(
+            no_labels("s1.csv"), series, pd.DataFrame())
+    fig = ms.plot_series(traces, phases, guide_lines=[20.2],
+                         guide_labels=["(110)"])
+    assert guide_names(fig.axes[0])[0].get_fontweight() == "normal"
+    plt_close(fig)
+
+
+def test_a_typed_guide_carries_its_own_name():
+    positions, labels, unreadable = ms.parse_guides("30.95=(111), 37.04")
+    assert positions == [30.95, 37.04]
+    assert labels == ["(111)", ""]
+    assert unreadable == []
+
+
+def test_a_bare_list_of_positions_still_reads_as_guides():
+    # The syntax section 5 had before the names: every position keeps
+    # working and gets an empty name.
+    positions, labels, _unreadable = ms.parse_guides("20.1; 30.9")
+    assert positions == [20.1, 30.9]
+    assert labels == ["", ""]
+
+
+def test_a_decimal_comma_is_read_as_two_guides():
+    # The tooltip has always warned about this: the comma separates, so
+    # '28,4' is two guides and not one at 28.4.
+    positions, _labels, _unreadable = ms.parse_guides("28,4")
+    assert positions == [28.0, 4.0]
+
+
+def test_an_unreadable_entry_is_named_and_left_out():
+    positions, labels, unreadable = ms.parse_guides("here=(110), 30.95")
+    assert positions == [30.95]
+    assert labels == [""]
+    assert unreadable == ["here=(110)"]
+
+
+def test_a_name_is_taken_exactly_as_it_was_typed():
+    # Mathtext is how an overbar is written, so nothing may be stripped from
+    # inside a name or wrapped around it.
+    _positions, labels, _unreadable = ms.parse_guides(r"30.95=$(\bar{1}11)$")
+    assert labels == [r"$(\bar{1}11)$"]
+
+
+def test_the_height_of_a_reflection_is_the_top_of_its_peak():
+    theta = np.array([19.8, 19.9, 20.0, 20.1, 20.2])
+    values = np.array([0.1, 0.4, 0.9, 0.3, 0.1])
+    assert ms.peak_height(theta, values, 20.0, 0.3) == pytest.approx(0.9)
+
+
+def test_a_peak_that_moved_is_still_found_inside_the_window():
+    """The ticks come from the first sample; the top trace has moved on.
+
+    A guide sits where the reflection started, so the height it is written
+    at has to be read over a window and not at that one angle, or a name
+    would sit on the shoulder of the peak it belongs to.
+    """
+    theta = np.array([19.8, 19.9, 20.0, 20.1, 20.2])
+    values = np.array([0.1, 0.2, 0.3, 0.8, 0.2])
+    assert ms.peak_height(theta, values, 20.0, 0.3) == pytest.approx(0.8)
+    # Outside the window the peak is not this reflection's own.
+    assert ms.peak_height(theta, values, 20.0, 0.05) == pytest.approx(0.3)
+
+
+def test_a_reflection_with_no_pattern_near_it_has_no_height():
+    theta = np.array([19.8, 20.0, 20.2])
+    values = np.array([0.1, 0.9, 0.2])
+    assert ms.peak_height(theta, values, 40.0, 0.3) == 0.0
+
+
+def test_two_names_that_do_not_touch_are_not_lifted():
+    assert ms.stagger([(0.0, 0.0, 10.0, 5.0), (20.0, 0.0, 30.0, 5.0)],
+                      [], step=6.0) == [0.0, 0.0]
+
+
+def test_a_name_over_another_is_lifted_clear_of_it():
+    assert ms.stagger([(0.0, 0.0, 10.0, 5.0), (5.0, 0.0, 15.0, 5.0)],
+                      [], step=6.0) == [0.0, 6.0]
+
+
+def test_a_name_beside_a_taller_one_stays_where_its_peak_is():
+    """Two names at different heights do not have to be on the same row.
+
+    This is the whole point of writing a name over its own peak: a name on a
+    small reflection sits low, and one on a tall reflection beside it passes
+    over it without either being moved.
+    """
+    assert ms.stagger([(0.0, 0.0, 10.0, 5.0), (5.0, 20.0, 15.0, 25.0)],
+                      [], step=6.0) == [0.0, 0.0]
+
+
+def test_a_name_is_lifted_clear_of_an_obstacle_it_did_not_place():
+    # The trace labels are on the axes before any name is, and a name has to
+    # clear them as it clears another name.
+    assert ms.stagger([(0.0, 0.0, 10.0, 5.0)], [(0.0, 0.0, 10.0, 5.0)],
+                      step=6.0) == [6.0]
+
+
+def test_the_lowest_name_settles_first():
+    """Order of lifting is by height, so the answer does not depend on typing.
+
+    The lower of two overlapping names keeps its place and the higher one
+    moves, whichever order they were given in.
+    """
+    high = (5.0, 3.0, 15.0, 8.0)
+    low = (0.0, 0.0, 10.0, 5.0)
+    assert ms.stagger([high, low], [], step=6.0) == [6.0, 0.0]
+    assert ms.stagger([low, high], [], step=6.0) == [0.0, 6.0]
 
 
 def shipped_setting(name):
@@ -955,3 +1524,17 @@ def test_no_setting_in_degrees_is_about_to_be_committed():
         f"{tuned} carries a measured 2theta position. Empty it before "
         "committing, or set it in section 5 of the notebook, where it "
         "stays in the widget. See docs/privacy.md")
+
+
+def test_no_reflection_name_is_about_to_be_committed():
+    """The names pair with GUIDE_LINES, so they ship empty for its reason.
+
+    A Miller index is not a position and gives no lattice spacing on its
+    own. It still names a reflection picked out of a pattern nobody else
+    has, and it is written beside the position it belongs to, so the gate
+    that keeps one out of a commit keeps the other out too.
+    """
+    assert shipped_setting("GUIDE_LABELS") == [], (
+        "GUIDE_LABELS names a reflection from your own pattern. Empty it "
+        "before committing, or set it in section 5 of the notebook, where "
+        "it stays in the widget. See docs/privacy.md")

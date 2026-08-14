@@ -28,6 +28,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.transforms import blended_transform_factory
@@ -153,6 +154,21 @@ TICK_HEIGHT = 0.10
 # stay in the widget. See docs/privacy.md.
 GUIDE_LINES: list[float] = []
 
+# The name of the reflection each guide marks, one per GUIDE_LINES value and
+# in the same order, written above the stack in the colour of the phase that
+# owns it. An empty string leaves that guide unnamed, and a list shorter than
+# GUIDE_LINES leaves the rest of them unnamed:
+#   GUIDE_LABELS = ["(111)", "(110)"]
+#
+# The text is drawn exactly as written, so an overbar is typed as mathtext,
+# r"$(\bar{1}11)$", in the same STIX face as the axis labels. A Miller index
+# is not a position and gives no lattice spacing on its own, but it names a
+# reflection out of your own pattern and it pairs with GUIDE_LINES, so it
+# ships empty for the same reason. Set it in section 5 of the notebook, where
+# the position and the name are typed together as '30.95=(111)'. See
+# docs/privacy.md.
+GUIDE_LABELS: list[str] = []
+
 # How far a GUIDE_LINES value may sit from a reflection and still snap to
 # it, in degrees. A value with nothing this close is reported and not
 # drawn, rather than being drawn at the typed position where no reflection
@@ -171,6 +187,40 @@ GUIDE_STYLE = ":"
 # dense stack. Past the width of the traces it crosses, a guide starts
 # hiding the peaks it is there to point at.
 GUIDE_WIDTH = 1.2
+
+# Weight of the guide names: 'normal', 'medium', 'semibold' or 'bold'. Its
+# own setting rather than the trace labels' LABEL_WEIGHT, because the two
+# sit differently: a trace label lies over a pattern, a guide name stands
+# alone in the space above the stack, where bold keeps a short name legible
+# once the figure is reduced to a column width. STIXGeneral carries a real
+# bold, so nothing is synthesised from the upright.
+GUIDE_LABEL_WEIGHT = "bold"
+
+# The room a name keeps over the pattern beneath it, in trace heights, so
+# 0.20 is a fifth of a pattern of clearance and does not change when the
+# trace spacing does. At 0.0 a name rests on what it stands over.
+#
+# Measured over the whole width the name covers on the topmost trace, not at
+# the one angle its guide sits at. A name is some two degrees wide on a
+# seventy degree axis, and measured at a point it would clear its own
+# reflection and still land on a taller neighbour, which is what a reader
+# sees as a name stuck to a peak. So a name over a small reflection standing
+# on its own sits low, and one over a crowded stretch rides above all of it.
+# This is the clearance each name gets, not one height for all of them.
+GUIDE_LABEL_HEIGHT = 0.20
+
+# Angle of the names, in degrees anticlockwise from upright. 0 writes them
+# across, 90 on end, reading upwards from just above the peak.
+#
+# It is the one setting that decides whether crowded names can be read at
+# all. Upright, a Miller index covers some two degrees of a seventy degree
+# axis and reaches its neighbours, so a group of reflections close together
+# ends up as a staircase of names climbing away from the peaks they belong
+# to. On end the same name covers about the width of one line of text, and
+# the same group stands side by side, each over its own peak. Nothing else
+# changes: the names are measured as they are drawn, so the clearance and
+# the lifting follow the turn on their own.
+GUIDE_LABEL_ROTATION = 0
 
 # --- Where the files are ------------------------------------------------
 DATA_FOLDER = Path("data")
@@ -266,6 +316,241 @@ def snap_to_phase(value: float, rows: dict[str, np.ndarray],
                                     or abs(snapped - value) < smallest):
             best, smallest = (snapped, label), abs(snapped - value)
     return best
+
+
+def parse_guides(text: str) -> tuple[list[float], list[str], list[str]]:
+    """A typed guide list as positions, the name of each, and what would not read.
+
+    One entry per guide, separated by a comma or a semicolon. An entry is a
+    2theta on its own, or a 2theta, an '=' and the name to write over that
+    guide. Typing the two together is what keeps them paired: two boxes, one
+    of positions and one of names, would fall out of step the first time a
+    guide was inserted in the middle of the list. The name is taken exactly
+    as typed, so an overbar can be written as mathtext.
+
+    The comma separates, it is not a decimal point: '28,4' is two guides.
+
+    >>> parse_guides("30.95=(111), 37.04")
+    ([30.95, 37.04], ['(111)', ''], [])
+    >>> parse_guides("here=(110), 30.95")
+    ([30.95], [''], ['here=(110)'])
+    """
+    positions: list[float] = []
+    labels: list[str] = []
+    unreadable: list[str] = []
+    for part in text.replace(";", ",").split(","):
+        if not part.strip():
+            continue
+        head, _sign, name = part.partition("=")
+        value = xp.to_number(head)
+        if value is None:
+            # Named rather than dropped in silence: a typo would otherwise
+            # take a guide out of the figure while its text sat in the box,
+            # read back afterwards as if it had been drawn.
+            unreadable.append(part.strip())
+            continue
+        positions.append(value)
+        labels.append(name.strip())
+    return positions, labels, unreadable
+
+
+def peak_height(theta: np.ndarray, values: np.ndarray, position: float,
+                window: float | None = None) -> float:
+    """How high the pattern rises at a reflection, over a window around it.
+
+    The name of a reflection belongs just above the peak it marks, so it has
+    to know how tall that peak is on the trace it is written over. Read over
+    a window rather than at the one angle: the ticks and the guides come
+    from the first sample of the series, and in a series drawn because a
+    reflection moves, the peak on the topmost trace has moved off it.
+    'window' defaults to GUIDE_SNAP, the same tolerance the guide itself
+    snapped with.
+
+    A reflection with no pattern inside the window answers 0.0, the
+    baseline of that trace, which is where a phase that has gone leaves its
+    name.
+
+    >>> theta, values = np.array([19.8, 20.0, 20.2]), np.array([0.1, 0.9, 0.2])
+    >>> peak_height(theta, values, 20.0, 0.3)
+    0.9
+    >>> peak_height(theta, values, 40.0, 0.3)
+    0.0
+    """
+    window = GUIDE_SNAP if window is None else window
+    near = np.abs(theta - position) <= window
+    return float(np.max(values[near])) if near.any() else 0.0
+
+
+def stagger(boxes: list[tuple[float, float, float, float]],
+            obstacles: list[tuple[float, float, float, float]],
+            step: float, gap: float = 4.0) -> list[float]:
+    """How far each box has to be lifted to clear the ones already there.
+
+    Every box is (left, bottom, right, top) in one unit, pixels in the
+    figure, and comes back with the distance to raise it, 0.0 for one that
+    already stands clear. Boxes settle from the lowest up, so a name on a
+    small reflection keeps the place its own peak gives it and a name that
+    would land on top of another is the one that moves. 'obstacles' are
+    boxes that never move, the trace labels among them.
+
+    Sideways the boxes are kept 'gap' apart; vertically touching is enough,
+    since 'step' is a line of text with air already in it.
+
+    >>> stagger([(0.0, 0.0, 10.0, 5.0), (20.0, 0.0, 30.0, 5.0)], [], 6.0)
+    [0.0, 0.0]
+    >>> stagger([(0.0, 0.0, 10.0, 5.0), (5.0, 0.0, 15.0, 5.0)], [], 6.0)
+    [0.0, 6.0]
+    """
+    lifts = [0.0] * len(boxes)
+    placed = list(obstacles)
+    for index in sorted(range(len(boxes)),
+                        key=lambda i: (boxes[i][1], boxes[i][0])):
+        left, low, right, high = boxes[index]
+        lift = 0.0
+        # Bounded by the number of boxes there are to clear: a lift that has
+        # passed every one of them is clear by construction, so a wrong
+        # overlap test cannot turn this into an endless climb.
+        for _ in range(len(placed) + 1):
+            if not any(right + gap > other_left and other_right + gap > left
+                       and high + lift > other_low and other_high > low + lift
+                       for other_left, other_low, other_right, other_high
+                       in placed):
+                break
+            lift += step
+        lifts[index] = lift
+        placed.append((left, low + lift, right, high + lift))
+    return lifts
+
+
+def draw_guide_labels(ax: Axes, labels: list[tuple[float, str, str]],
+                      pattern: tuple[np.ndarray, np.ndarray],
+                      clearance: float | None = None,
+                      snap: float | None = None,
+                      weight: str | None = None,
+                      rotation: float | None = None) -> None:
+    """Write one name per guide, each clear of the pattern under it.
+
+    'labels' is one (2theta, text, colour) per guide that was drawn, and
+    'pattern' the (2theta, height) of the topmost trace, the one the names
+    are written over. The limits of the axes have to be set before this
+    runs, since a string has no width until it is rendered and what the
+    renderer answers depends on the scale it is drawn at.
+
+    'clearance' is the room each name keeps over that pattern, in trace
+    heights, and it is measured over the whole width the name covers, not at
+    the one angle its guide sits at. A name is about two degrees wide on a
+    seventy degree axis, so measuring at a point would let it land on a
+    taller neighbour while formally clearing its own peak. 'snap' widens
+    that reach to at least the tolerance the guide itself snapped with, so a
+    reflection that has moved on the topmost trace is still covered.
+
+    A name over a small reflection therefore sits low and one over a tall
+    reflection sits high, which is what keeps them apart without a rule: two
+    names side by side only collide when the pattern under them is of a
+    height. Where they do, the lower one keeps its place and the other is
+    lifted a line at a time until it is clear, of the names already placed
+    and of the trace labels, which were on the axes first.
+
+    Whatever room is missing above them is taken by growing the figure, not
+    by widening the axis inside a figure of the same size. The second would
+    leave every pattern with less of the figure than it had, and the small
+    reflections a series is drawn to show are the first thing that costs.
+    The phase legend hangs from the top of the frame, so a name standing
+    under it asks for that much more; a name that clears it sideways, or
+    that sits low enough to pass beneath it, asks for nothing.
+
+    Typical use, from inside plot_series::
+
+        draw_guide_labels(ax, [(30.95, "(111)", "#EE8031")], (theta, values))
+    """
+    clearance = GUIDE_LABEL_HEIGHT if clearance is None else clearance
+    rotation = GUIDE_LABEL_ROTATION if rotation is None else rotation
+    snap = GUIDE_SNAP if snap is None else snap
+    weight = GUIDE_LABEL_WEIGHT if weight is None else weight
+    figure = ax.figure
+    theta, values = pattern
+    # Read before the names are added, so they are the obstacles and not
+    # each other: the trace labels are the only text already on the axes.
+    figure.canvas.draw()  # a string has no width until it is rendered
+    obstacles = [tuple(text.get_window_extent().extents) for text in ax.texts]
+    # Placed at the height of their own reflection to begin with. The width
+    # they cover is not known until they are drawn, and the height that
+    # width asks for is settled in the pass below.
+    texts = [ax.text(position, peak_height(theta, values, position, snap)
+                     + clearance, name, color=color, ha="center", va="bottom",
+                     # No rotation_mode='anchor': that turns the name about
+                     # its anchor and leaves the turned box hanging to one
+                     # side of the guide. The default aligns after the turn,
+                     # so a name on end still stands centred on its own line.
+                     fontsize=xp.FONT_SIZE_LEGEND, fontweight=weight,
+                     rotation=rotation, zorder=5)
+             for position, name, color in labels]
+    figure.canvas.draw()
+    frame = ax.get_window_extent()
+    inverse = ax.transData.inverted()
+    bottom, top = ax.get_ylim()
+    scale = frame.height / (top - bottom)  # pixels per trace height
+    boxes, line = [], 0.0
+    for text in texts:
+        box = text.get_window_extent()
+        # A name centred on a guide near the border would hang outside the
+        # frame, and bbox_inches='tight' would then widen the saved figure
+        # around it. Nudged in by the overhang, it sits a little off its own
+        # guide, which is still the guide nearest to it.
+        shift = max(0.0, frame.x0 - box.x0) - max(0.0, box.x1 - frame.x1)
+        left = inverse.transform((box.x0 + shift, 0.0))[0]
+        right = inverse.transform((box.x1 + shift, 0.0))[0]
+        # Clear of everything the name covers, its own reflection included:
+        # the wider of the two reaches wins.
+        height = peak_height(theta, values, (left + right) / 2,
+                             max(snap, (right - left) / 2)) + clearance
+        # Moved by the overhang, not to the middle of its own box: the two
+        # are the same only while a name is centred on its guide, and a
+        # name that is not would walk further off it on every pass.
+        moved = inverse.transform((shift, 0.0))[0] - inverse.transform(
+            (0.0, 0.0))[0]
+        text.set_position((text.get_position()[0] + moved, height))
+        # va='bottom' anchors the box at that height, so the box the packing
+        # works on follows from it without a second render.
+        low = ax.transData.transform((0.0, height))[1]
+        boxes.append((box.x0 + shift, low, box.x1 + shift, low + box.height))
+        line = max(line, box.height)
+
+    lifts = stagger(boxes, obstacles, line * 1.25)
+    for text, lift in zip(texts, lifts):
+        # In the scale the figure has now, which growing it below is built to
+        # preserve, so a name keeps the distance to the pattern either way.
+        text.set_y(text.get_position()[1] + lift / scale)
+
+    # What the names need above them, in pixels: to stay inside the frame,
+    # and to stay under the legend where one of them stands in its way. The
+    # legend is pinned to the top of the frame, so the two are kept apart by
+    # making room rather than by moving either of them.
+    legend = ax.get_legend()
+    legend_box = None if legend is None else legend.get_window_extent()
+    wanted = 0.0
+    for (left_px, _low, right_px, high), lift in zip(boxes, lifts):
+        wanted = max(wanted, high + lift + 0.25 * line - frame.y1)
+        if (legend_box is not None and right_px >= legend_box.x0
+                and left_px <= legend_box.x1):
+            wanted = max(wanted, high + lift + 0.25 * line - legend_box.y0)
+    # Doubling the figure is as far as this goes. Past it the names are worth
+    # less than the patterns under them, so the run says what it could not do
+    # rather than growing without end or cutting the top names in silence.
+    deficit = min(max(0.0, wanted), frame.height)
+    if deficit < wanted:
+        print(f"  ! {len(labels)} names need more room than the figure can "
+              "grow to hold; the top ones are cut. Name fewer guides, or "
+              "widen the window so fewer of them are lifted")
+    if deficit:
+        # The room is taken from a taller figure, not from the stack, and
+        # the axes keeps its share of a figure whose margins are relative,
+        # so the figure has to grow by more than the axes needs.
+        width, height = figure.get_size_inches()
+        figure.set_size_inches(
+            width, height + deficit / (frame.height / figure.bbox.height)
+            / figure.dpi)
+        ax.set_ylim(bottom, top + deficit / scale)
 
 
 def reflections_in_window(positions: np.ndarray,
@@ -424,6 +709,10 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                 tick_height: float | None = None,
                 show_ticks: bool | None = None,
                 guide_lines: list[float] | None = None,
+                guide_labels: list[str] | None = None,
+                guide_label_weight: str | None = None,
+                guide_label_height: float | None = None,
+                guide_label_rotation: float | None = None,
                 guide_snap: float | None = None,
                 guide_style: str | None = None,
                 guide_width: float | None = None,
@@ -443,6 +732,12 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     load_series, which reads the file, so a caller offering it as a control
     passes the same value to both.
 
+    'guide_labels' pairs with 'guide_lines' by position: the name of the
+    reflection that guide marks, or '' for none. Each name is written
+    'guide_label_height' above its own peak on the topmost trace, in the
+    colour of the phase its guide landed on, so a name over a small
+    reflection sits low and one over a tall reflection sits high.
+
     Typical use, after load_series::
 
         meta = xp.load_metadata(METADATA_FILE)
@@ -458,6 +753,14 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     tick_height = TICK_HEIGHT if tick_height is None else tick_height
     show_ticks = SHOW_TICKS if show_ticks is None else show_ticks
     guide_lines = GUIDE_LINES if guide_lines is None else guide_lines
+    guide_labels = GUIDE_LABELS if guide_labels is None else guide_labels
+    guide_label_weight = (GUIDE_LABEL_WEIGHT if guide_label_weight is None
+                          else guide_label_weight)
+    guide_label_height = (GUIDE_LABEL_HEIGHT if guide_label_height is None
+                          else guide_label_height)
+    guide_label_rotation = (GUIDE_LABEL_ROTATION
+                            if guide_label_rotation is None
+                            else guide_label_rotation)
     guide_snap = GUIDE_SNAP if guide_snap is None else guide_snap
     guide_style = GUIDE_STYLE if guide_style is None else guide_style
     guide_width = GUIDE_WIDTH if guide_width is None else guide_width
@@ -573,7 +876,14 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
     # of patterns is not hidden by them and a reflection can still be
     # followed up to the peak it belongs to. axvline works in axes fractions
     # vertically, so it does not depend on the limits being set yet.
-    for value in guide_lines:
+    # Reported rather than ignored: a name typed without the position it
+    # belongs to would otherwise vanish, and the reader would look for it on
+    # a guide that was never asked for.
+    if len(guide_labels) > len(guide_lines):
+        print(f"  ! {len(guide_labels)} names for {len(guide_lines)} guides, "
+              "the ones past the end of the guide list are not drawn")
+    named: list[tuple[float, str, str]] = []
+    for index, value in enumerate(guide_lines):
         snapped, owner = snap_to_phase(value, listed, guide_snap)
         if snapped is None:
             print(f"  ! no reflection within {guide_snap:g} deg of "
@@ -583,6 +893,11 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
         # owns the peak it points at as well as where it is.
         ax.axvline(snapped, color=tick_colors[owner], ls=guide_style,
                    lw=guide_width, zorder=4)
+        # By position in the list, so a guide dropped for having no
+        # reflection near it does not shift the next one's name onto itself.
+        name = guide_labels[index] if index < len(guide_labels) else ""
+        if name.strip():
+            named.append((snapped, name.strip(), tick_colors[owner]))
     if rows:
         # Built from 'listed', not 'ordered': a phase whose reflections all
         # fall outside the window gets no tick row, and must get no legend
@@ -604,15 +919,26 @@ def plot_series(traces: list[tuple[np.ndarray, np.ndarray, str]],
                   else r"Intensity / a.u.", fontsize=xp.FONT_SIZE_LABEL,
                   labelpad=10)
     ax.set_xlim(*widest)
+    # 0.08 was clearance for a curve. A line of text needs the same room the
+    # labels get between traces, or the topmost one is cut by the frame.
+    # max(1.0, label_height): the top of the trace is at 1.0, but
+    # label_height may sit above it, and the frame has to clear whichever is
+    # higher.
+    stack_top = (len(traces) - 1) * offset + max(1.0, label_height)
     ax.set_ylim(bottom=(block_top - (rows - 0.5) * pitch
                         if rows else -0.05),
-                # 0.08 was clearance for a curve. A line of text needs the
-                # same room the labels get between traces, or the topmost
-                # one is cut by the frame. max(1.0, label_height): the top
-                # of the trace is at 1.0, but label_height may sit above
-                # it, and the frame has to clear whichever is higher.
-                top=(len(traces) - 1) * offset + max(1.0, label_height)
-                + 0.30 * offset)
+                top=stack_top + 0.30 * offset)
+    if named:
+        # After the limits and after the legend, both of which it measures.
+        # It makes whatever room the names need itself; a figure with no name
+        # keeps the limit set above, untouched. The topmost trace is the one
+        # the names are written over, cropped to the window, so a name is
+        # placed against what is actually drawn under it.
+        top_theta, _top_obs, _top_name = traces[-1]
+        draw_guide_labels(ax, named,
+                          (top_theta[scopes[-1]], stacked[-1][scopes[-1]]),
+                          guide_label_height, guide_snap,
+                          guide_label_weight, guide_label_rotation)
     # No numbers on the intensity axis, for the reason the module gives: the
     # unit is arbitrary, and here the normalisation makes a comparison of
     # heights between traces meaningless on top of that.

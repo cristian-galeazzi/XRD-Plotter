@@ -141,6 +141,20 @@ def write_series(data_folder: Path, metadata_path: Path) -> None:
     metadata_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
+def hkl_label(hkl: tuple[int, int, int]) -> str:
+    """A Miller index as it is written on a figure: (1, 1, 1) -> '(111)'.
+
+    Built from the same tuple the position is computed from, so the name on
+    a guide and the guide under it can never drift apart.
+
+    >>> hkl_label((1, 1, 1))
+    '(111)'
+    >>> hkl_label((2, 0, 0))
+    '(200)'
+    """
+    return "(" + "".join(str(index) for index in hkl) + ")"
+
+
 def main():
     x, obs, calc, bkg = pattern()
     phases = {"Phase 1 hkl": np.array([c for c, _ in PEAKS_1]),
@@ -174,13 +188,18 @@ def main():
         # make_series.py an owner runs carries their own tuning, and an
         # example figure drawn through it would publish that tuning. Two
         # guides, one owned by each phase, so the example also shows a guide
-        # taking the colour of the tick row it came from.
+        # taking the colour of the tick row it came from. Both are named
+        # from the same hkl their positions are computed from, so the figure
+        # shows the labels without quoting anything measured.
         fig = ms.plot_series(traces, phases, colors=colors,
                              offset=1.35, label_height=0.90,
                              label_x=float("nan"), label_weight="bold",
                              tick_height=0.10, show_ticks=True,
                              guide_lines=[two_theta(CELL_1, (1, 1, 1)),
                                           two_theta(CELL_2, (1, 1, 0))],
+                             guide_labels=[hkl_label((1, 1, 1)),
+                                           hkl_label((1, 1, 0))],
+                             guide_label_weight="bold",
                              guide_snap=0.3,
                              guide_style=":", guide_width=1.2,
                              linewidth=0.9, use_sqrt=True,

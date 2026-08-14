@@ -142,7 +142,7 @@ Where the sections above draw one sample per figure,
 patterns and the reflection ticks, without the fit or the residual, each
 pattern rescaled to the same height and offset above the one below.
 
-![Five diffraction patterns stacked one above another on a square-root intensity axis, each labelled at its left with a composition, one row of orange and one of blue reflection ticks below the lowest pattern, and two dotted vertical guides rising through the stack in the colour of the phase that owns the reflection they mark.](docs/example_series.png)
+![Five diffraction patterns stacked one above another on a square-root intensity axis, each labelled at its left with a composition, one row of orange and one of blue reflection ticks below the lowest pattern, and two dotted vertical guides rising through the stack in the colour of the phase that owns the reflection they mark, each named with its Miller index over its own peak on the top pattern, the taller peak carrying its name higher.](docs/example_series.png)
 
 Which samples it holds and in which order comes from the `series_order`
 column of your metadata file, and `series_label` names each trace, so no
@@ -155,6 +155,14 @@ and it is also why **no height in that figure may be compared with
 another**. The ticks and the guides are read from the first member of the
 series, so in a series drawn because a reflection moves, they mark where it
 started rather than where each trace has it.
+
+A guide can carry the name of the reflection it marks. Type `30.95=(111)` in
+section 5 and `(111)` is written over that peak on the topmost pattern, in
+the colour of its phase. Each name sits at the height of its own reflection,
+which is what keeps them apart: two collide only where their peaks are of a
+height, and then the higher one is lifted clear. Where a name still needs
+room the figure grows taller, rather than squeezing the patterns into what
+is left.
 
 The window, the spacing, the labels, the ticks and the guides are all
 settings, and each one is a control in section 5, a constant at the top of
