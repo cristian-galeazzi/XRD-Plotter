@@ -63,9 +63,9 @@ LINEWIDTH_RESIDUALS = 0.8
 LINEWIDTH_TICKS = 2.0
 MARKER_SIZE_OBS = 15
 
-FONT_SIZE_LABEL = 20
-FONT_SIZE_LEGEND = 16
-FONT_SIZE_TICK = 16
+FONT_SIZE_LABEL = 30
+FONT_SIZE_LEGEND = 20
+FONT_SIZE_TICK = 20
 
 # Publication typography: serif text, STIX maths. STIXGeneral is the text
 # companion of that maths font and ships inside matplotlib, so a machine
