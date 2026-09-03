@@ -30,7 +30,7 @@ abstract: >-
   one implementation.
 repository-code: "https://github.com/cristian-galeazzi/XRD-Plotter"
 version: 1.0.0
-date-released: 2026-08-11
+date-released: 2026-09-03
 license: MIT
 keywords:
   - X-ray diffraction
