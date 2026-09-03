@@ -213,10 +213,11 @@ GSAS-II writes itself, `used`, `diff`, `tick-pos`, `tick pos`, `Axis-limits`,
 `axis limits`, `excluded` and the pattern columns above, the per-point
 uncertainties, `weight`, `weights`, `sig` and `sigma`, and the fit statistics
 people keep beside the pattern, `GOF`, `Rw`, `Rwp`, `Rexp` and `chi2`. All of
-them are in `NON_PHASE_COLUMNS`, and `Rp` deliberately is not, since it also
-labels a phase. Any other column counts as a phase when it fills
-at most half the rows, the share in `PHASE_MAX_FILL`. A column above that
-share is named on screen and left undrawn rather than dropped in silence, so
+them are in `NON_PHASE_COLUMNS`, and `Rp` deliberately is not, since a header
+that short is as likely to abbreviate a phase. Any other column counts as a
+phase when it fills at most half the rows, the share in `PHASE_MAX_FILL`. A
+column above that share is named on screen and left undrawn rather than
+dropped in silence, so
 a reflection list dense enough to cross the ceiling tells you why it is
 missing. A header repeated in the export, which pandas renames `tick-pos.1`,
 is matched against the blocklist without its suffix.

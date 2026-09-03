@@ -65,7 +65,7 @@ floor the README claims and on the version this is developed with.
 | A complete export, phases named `Alpha` and `Beta` | Only the two phases detected among eleven columns, `tick-pos` and `Axis-limits` left alone |
 | A header repeated in the export | The `tick-pos.1` pandas invents is still blocklisted, not drawn as a phase |
 | Two tick columns of different length, tail-padded with a space as the export pads them | All 8 and all 6 positions reach the drawn marks, bit-exact and in order, so a missing tick is never made here |
-| `Rw`, `Rw%`, `Rw / %`, `Rwp / %`, `chi2`, `GOF` and `Tick-Pos`, beside `Rp` | The folded blocklist catches every spelling, `Rp` stays undrawn as a phase, and a name added to `NON_PHASE_COLUMNS` takes effect on the next call, not at import |
+| `Rw`, `Rw%`, `Rw / %`, `Rwp / %`, `chi2`, `GOF` and `Tick-Pos`, beside `Rp` | The folded blocklist catches every spelling, `Rp` is still drawn since it is not on the list, and a name added to `NON_PHASE_COLUMNS` takes effect on the next call, not at import |
 | A column too full to be a reflection list | Reported by name and left undrawn |
 | A phase column named `Phase 1 hkl`, and one named `alpha` | The trailing `hkl` dropped and the first letter capitalised, so the header is what the legend prints |
 | A synthetic metadata row | Name and both phase fractions arrive in the legend text |

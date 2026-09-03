@@ -90,10 +90,11 @@ NON_PHASE_COLUMNS = frozenset({
     "sig", "sigma", "tick-pos", "tick pos", "axis-limits", "axis limits",
     "excluded", "gof", "rw", "rwp", "rexp", "chi2",
 })
-# 'rp' is deliberately absent: GSAS-II writes Rwp, and 'RP' is how a
-# phase is labelled. Every entry is a name a phase could
-# carry, 'sigma' for the intermetallic among them, and a phase whose header
-# matches one is not drawn. The 'phases:' line each run prints is the check.
+# 'rp' is deliberately absent: GSAS-II writes Rwp, and a header that short is
+# as likely to abbreviate a phase as a statistic. Every entry is a name a
+# phase could carry, 'sigma' for the intermetallic among them, and a phase
+# whose header matches one is not drawn. The 'phases:' line each run prints
+# is the check.
 # A reflection list is short: at most this share of the pattern's rows. A
 # column above the ceiling is reported and left undrawn, never dropped in
 # silence.

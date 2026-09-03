@@ -279,7 +279,7 @@ def test_fit_statistics_are_not_read_as_phases(tmp_path):
     """A statistic beside the pattern is sparse, so it would get a tick row.
 
     Blocklist entries are folded, so 'rw' covers 'Rw', 'Rw%' and 'Rw / %'.
-    'RP' names a phase and is deliberately not blocked, and
+    'Rp' can abbreviate a phase, so it is deliberately not blocked, and
     a header added to the blocklist on the module takes effect at once, which
     is why the folded set cannot be built at import.
     """
