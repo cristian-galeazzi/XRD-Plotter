@@ -7,6 +7,20 @@ Samples_metadata.csv
 *.csv
 # The nbconvert run in docs/validation.md writes this with outputs embedded
 executed.ipynb
+# Diffractometer exports and spreadsheets. The notebook reads none of them,
+# but they are what ends up next to it while working, and one committed by
+# accident would be a measurement published.
+*.raw
+*.brml
+*.xrdml
+*.uxd
+*.xy
+*.xlsx
+*.xls
+*.dat
+
+# Local agent notes: useful while working, not part of the published record
+CLAUDE.md
 
 # Agent scratch: implementation plans and per-task briefs, notes about the
 # work rather than part of it
