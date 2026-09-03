@@ -3,6 +3,7 @@
 [![tests](https://github.com/cristian-galeazzi/XRD-Plotter/actions/workflows/tests.yml/badge.svg)](https://github.com/cristian-galeazzi/XRD-Plotter/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22287278.svg)](https://doi.org/10.5281/zenodo.22287278)
 
 Give this notebook the CSV your Rietveld refinement exported. It returns the
 figure you would put in a paper: measured pattern, refined fit and background
@@ -286,8 +287,10 @@ Procedure: [docs/privacy.md](docs/privacy.md).
 ## How to cite
 
 See [`CITATION.cff`](CITATION.cff). GitHub shows a "Cite this repository"
-button. For a permanent, versioned DOI, archive a tagged release on
-[Zenodo](https://zenodo.org).
+button. Every release is archived on Zenodo under
+[10.5281/zenodo.22287278](https://doi.org/10.5281/zenodo.22287278), the DOI
+that always resolves to the newest version. Cite that one unless you need to
+pin the exact version you ran, which carries a DOI of its own.
 
 For a refinement done in GSAS-II, whose export format this notebook targets,
 please also cite:
